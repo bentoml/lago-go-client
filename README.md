@@ -9,14 +9,14 @@ This is a Go wrapper for Lago API
 | Project            | Release Badge                                                                                                                                   |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Lago**           | [![Lago Release](https://img.shields.io/github/v/release/getlago/lago)](https://github.com/getlago/lago/releases)                               |
-| **Lago Go Client** | [![Lago Go Client Release](https://img.shields.io/github/v/release/getlago/lago-go-client)](https://github.com/getlago/lago-go-client/releases) |
+| **Lago Go Client** | [![Lago Go Client Release](https://img.shields.io/github/v/release/getlago/lago-go-client)](https://github.com/bentoml/lago-go-client/releases) |
 
 ## Installation
 
 To use the client in your Go application:
 
 ```shell
-go get github.com/getlago/lago-go-client@v1
+go get github.com/bentoml/lago-go-client@v1
 ```
 
 ## Usage
@@ -31,7 +31,7 @@ import (
 	"fmt"
 	"log"
 
-	lago "github.com/getlago/lago-go-client"
+	lago "github.com/bentoml/lago-go-client"
 )
 
 func main() {
@@ -68,7 +68,7 @@ For detailed usage, refer to the [lago API reference](https://doc.getlago.com/ap
 1. Clone the repository:
 
     ```shell
-    git clone https://github.com/getlago/lago-go-client.git
+    git clone https://github.com/bentoml/lago-go-client.git
     cd lago-go-client
     ```
 
@@ -110,7 +110,7 @@ The Lago documentation is available at [doc.getlago.com](https://doc.getlago.com
 
 ## Contributing
 
-The contribution documentation is available [here](https://github.com/getlago/lago-go-client/blob/main/CONTRIBUTING.md)
+The contribution documentation is available [here](https://github.com/bentoml/lago-go-client/blob/main/CONTRIBUTING.md)
 
 ## License
 

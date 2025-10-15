@@ -53,13 +53,13 @@ func New() *Client {
 	restyClient := resty.New().
 		SetBaseURL(url).
 		SetHeader("Content-Type", "application/json").
-		SetHeader("User-Agent", "lago-go-client github.com/getlago/lago-go-client/v1").
+		SetHeader("User-Agent", "lago-go-client github.com/bentoml/lago-go-client/v1").
 		SetTransport(transport)
 
 	ingestRestyClient := resty.New().
 		SetBaseURL(url).
 		SetHeader("Content-Type", "application/json").
-		SetHeader("User-Agent", "lago-go-client github.com/getlago/lago-go-client/v1").
+		SetHeader("User-Agent", "lago-go-client github.com/bentoml/lago-go-client/v1").
 		SetTransport(transport)
 
 	return &Client{

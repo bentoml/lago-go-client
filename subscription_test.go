@@ -7,8 +7,8 @@ import (
 
 	qt "github.com/frankban/quicktest"
 
-	. "github.com/getlago/lago-go-client"
-	lt "github.com/getlago/lago-go-client/testing"
+	. "github.com/bentoml/lago-go-client"
+	lt "github.com/bentoml/lago-go-client/testing"
 )
 
 // Mock JSON response structure

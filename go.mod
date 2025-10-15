@@ -1,4 +1,4 @@
-module github.com/getlago/lago-go-client
+module github.com/bentoml/lago-go-client
 
 go 1.23.12
 
