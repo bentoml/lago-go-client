@@ -2,7 +2,9 @@ package lago
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"net/http"
 	"net/url"
 
 	"github.com/go-resty/resty/v2"
@@ -41,15 +43,24 @@ type Metadata struct {
 func New() *Client {
 	url := fmt.Sprintf("%s%s", baseURL, apiPath)
 
+	// Create transport with disabled certificate verification
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	}
+
 	restyClient := resty.New().
 		SetBaseURL(url).
 		SetHeader("Content-Type", "application/json").
-		SetHeader("User-Agent", "lago-go-client github.com/getlago/lago-go-client/v1")
+		SetHeader("User-Agent", "lago-go-client github.com/getlago/lago-go-client/v1").
+		SetTransport(transport)
 
 	ingestRestyClient := resty.New().
 		SetBaseURL(url).
 		SetHeader("Content-Type", "application/json").
-		SetHeader("User-Agent", "lago-go-client github.com/getlago/lago-go-client/v1")
+		SetHeader("User-Agent", "lago-go-client github.com/getlago/lago-go-client/v1").
+		SetTransport(transport)
 
 	return &Client{
 		BaseUrl:          url,
