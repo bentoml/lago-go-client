@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/getlago/lago-go-client"
+	"github.com/bentoml/lago-go-client"
 )
 
 func TestProviderError_UnmarshalJSON(t *testing.T) {

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	. "github.com/getlago/lago-go-client"
+	. "github.com/bentoml/lago-go-client"
 )
 
 func intPtr(v int) *int { return &v }
