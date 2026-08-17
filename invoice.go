@@ -29,6 +29,7 @@ const (
 	InvoiceStatusFailed    InvoiceStatus = "failed"
 	InvoiceStatusVoided    InvoiceStatus = "voided"
 	InvoiceStatusPending   InvoiceStatus = "pending"
+	InvoiceStatusDeleted   InvoiceStatus = "deleted"
 )
 
 const (
@@ -96,10 +97,17 @@ type InvoiceInput struct {
 }
 
 type InvoiceOneOffInput struct {
-	ExternalCustomerId string             `json:"external_customer_id,omitempty"`
-	Currency           string             `json:"currency,omitempty"`
-	Fees               []InvoiceFeesInput `json:"fees,omitempty"`
-	SkipPsp            bool               `json:"skip_psp,omitempty"`
+	ExternalCustomerId   string                     `json:"external_customer_id,omitempty"`
+	Currency             string                     `json:"currency,omitempty"`
+	PurchaseOrderNumber  *string                    `json:"purchase_order_number,omitempty"`
+	Fees                 []InvoiceFeesInput         `json:"fees,omitempty"`
+	SkipPsp              bool                       `json:"skip_psp,omitempty"`
+	PaymentMethod        *PaymentMethodInput        `json:"payment_method,omitempty"`
+	InvoiceCustomSection *InvoiceCustomSectionInput `json:"invoice_custom_section,omitempty"`
+}
+
+type RetryPaymentParams struct {
+	PaymentMethod *PaymentMethodInput `json:"payment_method,omitempty"`
 }
 
 type InvoicePreviewInput struct {
@@ -134,9 +142,10 @@ type InvoiceListInput struct {
 	AmountFrom *int `url:"amount_from,omitempty"`
 	AmountTo   *int `url:"amount_to,omitempty"`
 
-	SearchTerm       string      `url:"search_term,omitempty"`
-	BillingEntityIDs []uuid.UUID `url:"billing_entity_ids[],omitempty"`
-	Currency         Currency    `url:"currency,omitempty"`
+	SearchTerm          string      `url:"search_term,omitempty"`
+	BillingEntityIDs    []uuid.UUID `url:"billing_entity_ids[],omitempty"`
+	Currency            Currency    `url:"currency,omitempty"`
+	PurchaseOrderNumber string      `url:"purchase_order_number,omitempty"`
 
 	Metadata *InvoiceListInputMetadata `url:"metadata,omitempty"`
 }
@@ -199,6 +208,7 @@ type Invoice struct {
 	BillingEntityCode string    `json:"billing_entity_code,omitempty"`
 	Number            string    `json:"number,omitempty"`
 
+	PurchaseOrderNumber  *string   `json:"purchase_order_number,omitempty"`
 	IssuingDate          string    `json:"issuing_date,omitempty"`
 	PaymentDisputeLostAt time.Time `json:"payment_dispute_lost_at,omitempty"`
 	PaymentDueDate       string    `json:"payment_due_date,omitempty"`
@@ -210,17 +220,19 @@ type Invoice struct {
 
 	Currency Currency `json:"currency,omitempty"`
 
-	FeesAmountCents                     int `json:"fees_amount_cents,omitempty"`
-	TaxesAmountCents                    int `json:"taxes_amount_cents,omitempty"`
-	CouponsAmountCents                  int `json:"coupons_amount_cents,omitempty"`
-	CreditNotesAmountCents              int `json:"credit_notes_amount_cents,omitempty"`
-	SubTotalExcludingTaxesAmountCents   int `json:"sub_total_excluding_taxes_amount_cents,omitempty"`
-	SubTotalIncludingTaxesAmountCents   int `json:"sub_total_including_taxes_amount_cents,omitempty"`
-	TotalAmountCents                    int `json:"total_amount_cents,omitempty"`
-	TotalDueAmountCents                 int `json:"total_due_amount_cents,omitempty"`
-	PrepaidCreditAmountCents            int `json:"prepaid_credit_amount_cents,omitempty"`
-	ProgressiveBillingCreditAmountCents int `json:"progressive_billing_credit_amount_cents"`
-	NetPaymentTerm                      int `json:"net_payment_term,omitempty"`
+	FeesAmountCents                     int  `json:"fees_amount_cents,omitempty"`
+	TaxesAmountCents                    int  `json:"taxes_amount_cents,omitempty"`
+	CouponsAmountCents                  int  `json:"coupons_amount_cents,omitempty"`
+	CreditNotesAmountCents              int  `json:"credit_notes_amount_cents,omitempty"`
+	SubTotalExcludingTaxesAmountCents   int  `json:"sub_total_excluding_taxes_amount_cents,omitempty"`
+	SubTotalIncludingTaxesAmountCents   int  `json:"sub_total_including_taxes_amount_cents,omitempty"`
+	TotalAmountCents                    int  `json:"total_amount_cents,omitempty"`
+	TotalDueAmountCents                 int  `json:"total_due_amount_cents,omitempty"`
+	PrepaidCreditAmountCents            int  `json:"prepaid_credit_amount_cents,omitempty"`
+	PrepaidGrantedCreditAmountCents     *int `json:"prepaid_granted_credit_amount_cents,omitempty"`
+	PrepaidPurchasedCreditAmountCents   *int `json:"prepaid_purchased_credit_amount_cents,omitempty"`
+	ProgressiveBillingCreditAmountCents int  `json:"progressive_billing_credit_amount_cents"`
+	NetPaymentTerm                      int  `json:"net_payment_term,omitempty"`
 
 	FileURL       string                    `json:"file_url,omitempty"`
 	Metadata      []InvoiceMetadataResponse `json:"metadata,omitempty"`
@@ -244,6 +256,11 @@ type InvoicePaymentDetails struct {
 	ExternalCustomerID string    `json:"external_customer_id,omitempty"`
 	PaymentProvider    string    `json:"payment_provider,omitempty"`
 	PaymentUrl         string    `json:"payment_url,omitempty"`
+}
+
+type InvoicePaymentDisputLost struct {
+	Invoice       Invoice       `json:"invoice"`
+	ProviderError ProviderError `json:"provider_error,omitempty"`
 }
 
 func (c *Client) Invoice() *InvoiceRequest {
@@ -520,17 +537,42 @@ func (ir *InvoiceRequest) LoseDispute(ctx context.Context, invoiceID string) (*I
 	return nil, nil
 }
 
-// We have Invoice as a possible return to be consitent with other endpoints, but no Invoice will be returned.
-func (ir *InvoiceRequest) RetryPayment(ctx context.Context, invoiceID string) (*Invoice, *Error) {
-	subPath := fmt.Sprintf("%s/%s/%s", "invoices", invoiceID, "retry_payment")
+func (ir *InvoiceRequest) Delete(ctx context.Context, invoiceID string) (*Invoice, *Error) {
+	subPath := fmt.Sprintf("%s/%s", "invoices", invoiceID)
+
 	clientRequest := &ClientRequest{
 		Path:   subPath,
 		Result: &InvoiceResult{},
 	}
 
-	// We don't return an invoice here due to async retry payment processing
-	_, err := ir.client.PostWithoutBody(ctx, clientRequest)
+	result, err := ir.client.Delete(ctx, clientRequest)
 	if err != nil {
+		return nil, err
+	}
+
+	invoiceResult, ok := result.(*InvoiceResult)
+	if !ok {
+		return nil, &ErrorTypeAssert
+	}
+
+	return invoiceResult.Invoice, nil
+}
+
+// We have Invoice as a possible return to be consitent with other endpoints, but no Invoice will be returned.
+func (ir *InvoiceRequest) RetryPayment(ctx context.Context, invoiceID string, paymentMethod ...*PaymentMethodInput) (*Invoice, *Error) {
+	subPath := fmt.Sprintf("%s/%s/%s", "invoices", invoiceID, "retry_payment")
+	clientRequest := &ClientRequest{
+		Path: subPath,
+	}
+
+	// We don't return an invoice here due to async retry payment processing
+	if len(paymentMethod) > 0 && paymentMethod[0] != nil {
+		clientRequest.Body = &RetryPaymentParams{
+			PaymentMethod: paymentMethod[0],
+		}
+	}
+
+	if err := ir.client.PostWithoutResult(ctx, clientRequest); err != nil {
 		return nil, err
 	}
 

@@ -23,6 +23,14 @@ type PlanParams struct {
 	Plan *PlanInput `json:"plan"`
 }
 
+type PlanMetadataResult struct {
+	Metadata map[string]*string `json:"metadata"`
+}
+
+type PlanMetadataParams struct {
+	Metadata map[string]*string `json:"metadata"`
+}
+
 type PlanInterval string
 
 const (
@@ -34,18 +42,19 @@ const (
 )
 
 type PlanChargeInput struct {
-	LagoID             *uuid.UUID             `json:"id,omitempty"`
-	BillableMetricID   uuid.UUID              `json:"billable_metric_id,omitempty"`
-	AmountCurrency     Currency               `json:"amount_currency,omitempty"`
-	ChargeModel        ChargeModel            `json:"charge_model,omitempty"`
-	PayInAdvance       bool                   `json:"pay_in_advance,omitempty"`
-	Invoiceable        bool                   `json:"invoiceable,omitempty"`
-	RegroupPaidFees    string                 `json:"regroup_paid_fees,omitempty"`
-	Prorated           bool                   `json:"prorated,omitempty"`
-	MinAmountCents     int                    `json:"min_amount_cents,omitempty"`
-	Properties         map[string]interface{} `json:"properties"`
-	Filters            []ChargeFilter         `json:"filters,omitempty"`
-	AppliedPricingUnit *AppliedPricingUnit    `json:"applied_pricing_unit,omitempty"`
+	LagoID              *uuid.UUID             `json:"id,omitempty"`
+	BillableMetricID    uuid.UUID              `json:"billable_metric_id,omitempty"`
+	AmountCurrency      Currency               `json:"amount_currency,omitempty"`
+	ChargeModel         ChargeModel            `json:"charge_model,omitempty"`
+	PayInAdvance        bool                   `json:"pay_in_advance,omitempty"`
+	Invoiceable         bool                   `json:"invoiceable,omitempty"`
+	RegroupPaidFees     string                 `json:"regroup_paid_fees,omitempty"`
+	Prorated            bool                   `json:"prorated,omitempty"`
+	MinAmountCents      int                    `json:"min_amount_cents,omitempty"`
+	Properties          map[string]interface{} `json:"properties"`
+	Filters             []ChargeFilter         `json:"filters,omitempty"`
+	AppliedPricingUnit  *AppliedPricingUnit    `json:"applied_pricing_unit,omitempty"`
+	AcceptsTargetWallet *bool                  `json:"accepts_target_wallet,omitempty"`
 
 	TaxCodes []string `json:"tax_codes,omitempty"`
 }
@@ -57,21 +66,24 @@ type MinimumCommitmentInput struct {
 }
 
 type PlanInput struct {
-	Name               string                  `json:"name,omitempty"`
-	InvoiceDisplayName string                  `json:"invoice_display_name,omitempty"`
-	Code               string                  `json:"code,omitempty"`
-	Interval           PlanInterval            `json:"interval,omitempty"`
-	Description        string                  `json:"description,omitempty"`
-	AmountCents        int                     `json:"amount_cents"`
-	AmountCurrency     Currency                `json:"amount_currency,omitempty"`
-	PayInAdvance       bool                    `json:"pay_in_advance"`
-	BillChargesMonthly bool                    `json:"bill_charges_monthly"`
-	TrialPeriod        float32                 `json:"trial_period"`
-	Charges            []PlanChargeInput       `json:"charges,omitempty"`
-	MinimumCommitment  *MinimumCommitmentInput `json:"minimum_commitment,omitempty"`
-	TaxCodes           []string                `json:"tax_codes,omitempty"`
-	UsageThresholds    []UsageThresholdInput   `json:"usage_thresholds,omitempty"`
-	CascadeUpdates     bool                    `json:"cascade_updates"`
+	Name                    string                  `json:"name,omitempty"`
+	InvoiceDisplayName      string                  `json:"invoice_display_name,omitempty"`
+	Code                    string                  `json:"code,omitempty"`
+	Interval                PlanInterval            `json:"interval,omitempty"`
+	Description             string                  `json:"description,omitempty"`
+	AmountCents             int                     `json:"amount_cents"`
+	AmountCurrency          Currency                `json:"amount_currency,omitempty"`
+	PayInAdvance            bool                    `json:"pay_in_advance"`
+	BillChargesMonthly      bool                    `json:"bill_charges_monthly"`
+	BillFixedChargesMonthly *bool                   `json:"bill_fixed_charges_monthly,omitempty"`
+	TrialPeriod             float32                 `json:"trial_period"`
+	Charges                 []PlanChargeInput       `json:"charges,omitempty"`
+	FixedCharges            []FixedChargeInput      `json:"fixed_charges,omitempty"`
+	MinimumCommitment       *MinimumCommitmentInput `json:"minimum_commitment,omitempty"`
+	TaxCodes                []string                `json:"tax_codes,omitempty"`
+	UsageThresholds         []UsageThresholdInput   `json:"usage_thresholds,omitempty"`
+	CascadeUpdates          bool                    `json:"cascade_updates"`
+	Metadata                map[string]string       `json:"metadata,omitempty"`
 }
 
 type PlanListInput struct {
@@ -88,26 +100,29 @@ type MinimumCommitment struct {
 	CreatedAt          time.Time    `json:"created_at,omitempty"`
 	UpdatedAt          time.Time    `json:"updated_at,omitempty"`
 
-	Taxes []Tax `json:"tax,omitempty"`
+	Taxes []Tax `json:"taxes,omitempty"`
 }
 
 type Plan struct {
-	LagoID             uuid.UUID          `json:"lago_id"`
-	Name               string             `json:"name,omitempty"`
-	InvoiceDisplayName string             `json:"invoice_display_name,omitempty"`
-	Code               string             `json:"code,omitempty"`
-	Interval           PlanInterval       `json:"interval,omitempty"`
-	Description        string             `json:"description,omitempty"`
-	AmountCents        int                `json:"amount_cents,omitempty"`
-	AmountCurrency     Currency           `json:"amount_currency,omitempty"`
-	PayInAdvance       bool               `json:"pay_in_advance,omitempty"`
-	BillChargesMonthly bool               `json:"bill_charges_monthly,omitempty"`
-	Charges            []Charge           `json:"charges,omitempty"`
-	MinimumCommitment  *MinimumCommitment `json:"minimum_commitment"`
+	LagoID                  uuid.UUID          `json:"lago_id"`
+	Name                    string             `json:"name,omitempty"`
+	InvoiceDisplayName      string             `json:"invoice_display_name,omitempty"`
+	Code                    string             `json:"code,omitempty"`
+	Interval                PlanInterval       `json:"interval,omitempty"`
+	Description             string             `json:"description,omitempty"`
+	AmountCents             int                `json:"amount_cents,omitempty"`
+	AmountCurrency          Currency           `json:"amount_currency,omitempty"`
+	PayInAdvance            bool               `json:"pay_in_advance,omitempty"`
+	BillChargesMonthly      bool               `json:"bill_charges_monthly,omitempty"`
+	BillFixedChargesMonthly *bool              `json:"bill_fixed_charges_monthly,omitempty"`
+	Charges                 []Charge           `json:"charges,omitempty"`
+	FixedCharges            []FixedCharge      `json:"fixed_charges,omitempty"`
+	MinimumCommitment       *MinimumCommitment `json:"minimum_commitment"`
 
 	Taxes           []Tax             `json:"taxes,omitempty"`
 	UsageThresholds []UsageThreshold  `json:"usage_thresholds,omitempty"`
 	Entitlements    []PlanEntitlement `json:"entitlements,omitempty"`
+	Metadata        map[string]string `json:"metadata,omitempty"`
 }
 
 func (c *Client) Plan() *PlanRequest {
@@ -235,4 +250,90 @@ func (pr *PlanRequest) Delete(ctx context.Context, planCode string) (*Plan, *Err
 	}
 
 	return planResult.Plan, nil
+}
+
+func (pr *PlanRequest) ReplaceMetadata(ctx context.Context, planCode string, metadata map[string]*string) (map[string]*string, *Error) {
+	subPath := fmt.Sprintf("%s/%s/%s", "plans", planCode, "metadata")
+
+	clientRequest := &ClientRequest{
+		Path:   subPath,
+		Result: &PlanMetadataResult{},
+		Body:   &PlanMetadataParams{Metadata: metadata},
+	}
+
+	result, err := pr.client.Post(ctx, clientRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	metadataResult, ok := result.(*PlanMetadataResult)
+	if !ok {
+		return nil, &ErrorTypeAssert
+	}
+
+	return metadataResult.Metadata, nil
+}
+
+func (pr *PlanRequest) MergeMetadata(ctx context.Context, planCode string, metadata map[string]*string) (map[string]*string, *Error) {
+	subPath := fmt.Sprintf("%s/%s/%s", "plans", planCode, "metadata")
+
+	clientRequest := &ClientRequest{
+		Path:   subPath,
+		Result: &PlanMetadataResult{},
+		Body:   &PlanMetadataParams{Metadata: metadata},
+	}
+
+	result, err := pr.client.Patch(ctx, clientRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	metadataResult, ok := result.(*PlanMetadataResult)
+	if !ok {
+		return nil, &ErrorTypeAssert
+	}
+
+	return metadataResult.Metadata, nil
+}
+
+func (pr *PlanRequest) DeleteAllMetadata(ctx context.Context, planCode string) (map[string]*string, *Error) {
+	subPath := fmt.Sprintf("%s/%s/%s", "plans", planCode, "metadata")
+
+	clientRequest := &ClientRequest{
+		Path:   subPath,
+		Result: &PlanMetadataResult{},
+	}
+
+	result, err := pr.client.Delete(ctx, clientRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	metadataResult, ok := result.(*PlanMetadataResult)
+	if !ok {
+		return nil, &ErrorTypeAssert
+	}
+
+	return metadataResult.Metadata, nil
+}
+
+func (pr *PlanRequest) DeleteMetadataKey(ctx context.Context, planCode string, key string) (map[string]*string, *Error) {
+	subPath := fmt.Sprintf("%s/%s/%s/%s", "plans", planCode, "metadata", key)
+
+	clientRequest := &ClientRequest{
+		Path:   subPath,
+		Result: &PlanMetadataResult{},
+	}
+
+	result, err := pr.client.Delete(ctx, clientRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	metadataResult, ok := result.(*PlanMetadataResult)
+	if !ok {
+		return nil, &ErrorTypeAssert
+	}
+
+	return metadataResult.Metadata, nil
 }

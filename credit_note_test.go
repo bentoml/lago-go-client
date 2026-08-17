@@ -37,6 +37,7 @@ var mockCreditNote = map[string]interface{}{
 	"balance_amount_cents":                   100,
 	"credit_amount_cents":                    100,
 	"refund_amount_cents":                    0,
+	"offset_amount_cents":                    100,
 	"coupons_adjustment_amount_cents":        20,
 	"created_at":                             "2022-09-14T16:35:31Z",
 	"updated_at":                             "2022-09-14T16:35:31Z",
@@ -178,6 +179,64 @@ var mockCreditNoteResponse = map[string]interface{}{
 	"credit_note": mockCreditNote,
 }
 
+var mockCustomer = map[string]interface{}{
+	"lago_id":                      "1a901a90-1a90-1a90-1a90-1a901a901a90",
+	"sequential_id":                1,
+	"slug":                         "LAG-1234-001",
+	"external_id":                  "5eb02857-a71e-4ea2-bcf9-57d3a41bc6ba",
+	"billing_entity_code":          "acme_corp",
+	"address_line1":                "5230 Penfield Ave",
+	"address_line2":                nil,
+	"applicable_timezone":          "America/Los_Angeles",
+	"city":                         "Woodland Hills",
+	"country":                      "US",
+	"currency":                     "USD",
+	"email":                        "dinesh@piedpiper.test",
+	"legal_name":                   "Coleman-Blair",
+	"legal_number":                 "49-008-2965",
+	"logo_url":                     "http://hooli.com/logo.png",
+	"name":                         "Gavin Belson",
+	"firstname":                    "Gavin",
+	"lastname":                     "Belson",
+	"account_type":                 "customer",
+	"customer_type":                "company",
+	"phone":                        "1-171-883-3711 x245",
+	"state":                        "CA",
+	"tax_identification_number":    "EU123456789",
+	"timezone":                     "America/Los_Angeles",
+	"url":                          "http://hooli.com",
+	"zipcode":                      "91364",
+	"net_payment_term":             30,
+	"created_at":                   "2022-04-29T08:59:51Z",
+	"updated_at":                   "2022-04-29T08:59:51Z",
+	"finalize_zero_amount_invoice": "inherit",
+	"skip_invoice_custom_sections": false,
+}
+
+var mockCreditNoteWithCustomer = func() map[string]interface{} {
+	result := make(map[string]interface{})
+	for k, v := range mockCreditNote {
+		result[k] = v
+	}
+	result["customer"] = mockCustomer
+	return result
+}()
+
+var mockCreditNoteWithCustomerResponse = map[string]interface{}{
+	"credit_note": mockCreditNoteWithCustomer,
+}
+
+var mockMetadataResponse = map[string]interface{}{
+	"metadata": map[string]interface{}{
+		"foo": "bar",
+		"baz": nil,
+	},
+}
+
+var mockNullMetadataResponse = map[string]interface{}{
+	"metadata": nil,
+}
+
 var mockCreditNoteEstimateResponse = map[string]interface{}{
 	"estimated_credit_note": map[string]interface{}{
 		"lago_invoice_id":                         "1a901a90-1a90-1a90-1a90-1a901a901a90",
@@ -188,6 +247,7 @@ var mockCreditNoteEstimateResponse = map[string]interface{}{
 		"sub_total_excluding_taxes_amount_cents":  100,
 		"max_creditable_amount_cents":             100,
 		"max_refundable_amount_cents":             0,
+		"max_offsettable_amount_cents":            100,
 		"coupons_adjustment_amount_cents":         20,
 		"precise_coupons_adjustment_amount_cents": 20,
 		"precise_taxes_amount_cents":              20,
@@ -236,6 +296,7 @@ func assertCreditNoteResponse(c *qt.C, result *CreditNote) {
 	c.Assert(result.CreditAmountCents, qt.Equals, 100)
 	c.Assert(result.BalanceAmountCents, qt.Equals, 100)
 	c.Assert(result.RefundAmountCents, qt.Equals, 0)
+	c.Assert(result.OffsetAmountCents, qt.Equals, 100)
 	c.Assert(result.TaxesAmountCents, qt.Equals, 20)
 	c.Assert(result.TaxesRate, qt.Equals, 20.0)
 	c.Assert(result.SubTotalExcludingTaxesAmountCents, qt.Equals, 100)
@@ -269,12 +330,22 @@ func assertCreditNoteResponse(c *qt.C, result *CreditNote) {
 	c.Assert(result.ErrorDetails, qt.HasLen, 0)
 }
 
+func assertCreditNoteWithCustomerResponse(c *qt.C, result *CreditNote) {
+	assertCreditNoteResponse(c, result)
+
+	c.Assert(result.Customer.LagoID.String(), qt.Equals, "1a901a90-1a90-1a90-1a90-1a901a901a90")
+	c.Assert(result.Customer.ExternalID, qt.Equals, "5eb02857-a71e-4ea2-bcf9-57d3a41bc6ba")
+	c.Assert(result.Customer.Name, qt.Equals, "Gavin Belson")
+	c.Assert(result.Customer.Email, qt.Equals, "dinesh@piedpiper.test")
+}
+
 func assertCreditNoteEstimateResponse(c *qt.C, result *EstimatedCreditNote) {
 	c.Assert(result.LagoInvoiceID.String(), qt.Equals, "1a901a90-1a90-1a90-1a90-1a901a901a90")
 	c.Assert(result.InvoiceNumber, qt.Equals, "LAG-1234")
 	c.Assert(result.Currency, qt.Equals, Currency("EUR"))
 	c.Assert(result.MaxCreditableAmountCents, qt.Equals, 100)
 	c.Assert(result.MaxRefundableAmountCents, qt.Equals, 0)
+	c.Assert(result.MaxOffsettableAmountCents, qt.Equals, 100)
 	c.Assert(result.TaxesAmountCents, qt.Equals, 20)
 	c.Assert(result.TaxesRate, qt.Equals, 20.0)
 	c.Assert(result.SubTotalExcludingTaxesAmountCents, qt.Equals, 100)
@@ -319,12 +390,12 @@ func TestCreditNoteRequest_Get(t *testing.T) {
 		server := lt.NewMockServer(c).
 			MatchMethod("GET").
 			MatchPath("/api/v1/credit_notes/1a901a90-1a90-1a90-1a90-1a901a901a90").
-			MockResponse(mockCreditNoteResponse)
+			MockResponse(mockCreditNoteWithCustomerResponse)
 		defer server.Close()
 
 		result, err := server.Client().CreditNote().Get(context.Background(), creditNoteUUID)
 		c.Assert(err == nil, qt.IsTrue)
-		assertCreditNoteResponse(c, result)
+		assertCreditNoteWithCustomerResponse(c, result)
 	})
 }
 
@@ -407,21 +478,22 @@ func TestCreditNoteRequest_GetList(t *testing.T) {
 			MatchMethod("GET").
 			MatchPath("/api/v1/credit_notes").
 			MatchQuery(map[string]interface{}{
-				"per_page":             "10",
-				"page":                 "1",
-				"external_customer_id": "CUSTOMER_1",
-				"issuing_date_from":    "2022-09-14T00:00:00Z",
-				"issuing_date_to":      "2022-09-14T23:59:59Z",
-				"amount_from":          "10",
-				"amount_to":            "1000",
-				"search_term":          "credit",
-				"billing_entity_ids[]": []string{"1a901a90-1a90-1a90-1a90-1a901a901a90", "2a902a90-2a90-2a90-2a90-2a902a902a90"},
-				"credit_status":        "consumed",
-				"currency":             "EUR",
-				"invoice_number":       "LAG_1234",
-				"reason":               "order_change",
-				"refund_status":        "pending",
-				"self_billed":          "false",
+				"per_page":              "10",
+				"page":                  "1",
+				"external_customer_id":  "CUSTOMER_1",
+				"issuing_date_from":     "2022-09-14T00:00:00Z",
+				"issuing_date_to":       "2022-09-14T23:59:59Z",
+				"amount_from":           "10",
+				"amount_to":             "1000",
+				"search_term":           "credit",
+				"billing_entity_ids[]":  []string{"1a901a90-1a90-1a90-1a90-1a901a901a90", "2a902a90-2a90-2a90-2a90-2a902a902a90"},
+				"credit_status":         "consumed",
+				"currency":              "EUR",
+				"invoice_number":        "LAG_1234",
+				"purchase_order_number": "PO-123",
+				"reason":                "order_change",
+				"refund_status":         "pending",
+				"self_billed":           "false",
 			}).
 			MockResponse(mockCreditNoteListResponse)
 		defer server.Close()
@@ -431,21 +503,22 @@ func TestCreditNoteRequest_GetList(t *testing.T) {
 		entityUUID2, _ := uuid.Parse("2a902a90-2a90-2a90-2a90-2a902a902a90")
 
 		result, err := server.Client().CreditNote().GetList(context.Background(), &CreditNoteListInput{
-			PerPage:            Ptr(10),
-			Page:               Ptr(1),
-			ExternalCustomerID: "CUSTOMER_1",
-			IssuingDateFrom:    "2022-09-14T00:00:00Z",
-			IssuingDateTo:      "2022-09-14T23:59:59Z",
-			AmountFrom:         10,
-			AmountTo:           1000,
-			SearchTerm:         "credit",
-			BillingEntityIDs:   []uuid.UUID{entityUUID1, entityUUID2},
-			CreditStatus:       CreditNoteCreditStatusConsumed,
-			Currency:           EUR,
-			InvoiceNumber:      "LAG_1234",
-			Reason:             CreditNoteReasonOrderChange,
-			RefundStatus:       CreditNoteRefundStatusPending,
-			SelfBilled:         &selfBilled,
+			PerPage:             Ptr(10),
+			Page:                Ptr(1),
+			ExternalCustomerID:  "CUSTOMER_1",
+			IssuingDateFrom:     "2022-09-14T00:00:00Z",
+			IssuingDateTo:       "2022-09-14T23:59:59Z",
+			AmountFrom:          10,
+			AmountTo:            1000,
+			SearchTerm:          "credit",
+			BillingEntityIDs:    []uuid.UUID{entityUUID1, entityUUID2},
+			CreditStatus:        CreditNoteCreditStatusConsumed,
+			Currency:            EUR,
+			InvoiceNumber:       "LAG_1234",
+			PurchaseOrderNumber: "PO-123",
+			Reason:              CreditNoteReasonOrderChange,
+			RefundStatus:        CreditNoteRefundStatusPending,
+			SelfBilled:          &selfBilled,
 		})
 
 		c.Assert(err == nil, qt.IsTrue)
@@ -466,7 +539,7 @@ func TestCreditNoteRequest_Create(t *testing.T) {
 	t.Run("When create is called", func(t *testing.T) {
 		c := qt.New(t)
 
-		server := lt.ServerWithAssertions(c, mockCreditNoteResponse, func(c *qt.C, r *http.Request) {
+		server := lt.ServerWithAssertions(c, mockCreditNoteWithCustomerResponse, func(c *qt.C, r *http.Request) {
 			c.Assert(r.Method, qt.Equals, "POST")
 			c.Assert(r.URL.Path, qt.Equals, "/api/v1/credit_notes")
 
@@ -484,6 +557,7 @@ func TestCreditNoteRequest_Create(t *testing.T) {
 				c.Assert(creditNote["description"], qt.Equals, "test description")
 				c.Assert(creditNote["credit_amount_cents"], qt.Equals, float64(10))
 				c.Assert(creditNote["refund_amount_cents"], qt.Equals, float64(20))
+				c.Assert(creditNote["offset_amount_cents"], qt.Equals, float64(20))
 
 				c.Assert(creditNote["items"], qt.HasLen, 1)
 
@@ -512,10 +586,11 @@ func TestCreditNoteRequest_Create(t *testing.T) {
 			},
 			CreditAmountCents: 10,
 			RefundAmountCents: 20,
+			OffsetAmountCents: 20,
 		})
 
 		c.Assert(err == nil, qt.IsTrue)
-		assertCreditNoteResponse(c, result)
+		assertCreditNoteWithCustomerResponse(c, result)
 	})
 }
 
@@ -538,7 +613,7 @@ func TestCreditNoteRequest_Update(t *testing.T) {
 
 		creditNoteUUID, _ := uuid.Parse("1a901a90-1a90-1a90-1a90-1a901a901a90")
 
-		server := lt.ServerWithAssertions(c, mockCreditNoteResponse, func(c *qt.C, r *http.Request) {
+		server := lt.ServerWithAssertions(c, mockCreditNoteWithCustomerResponse, func(c *qt.C, r *http.Request) {
 			c.Assert(r.Method, qt.Equals, "PUT")
 			c.Assert(r.URL.Path, qt.Equals, "/api/v1/credit_notes/1a901a90-1a90-1a90-1a90-1a901a901a90")
 
@@ -563,7 +638,7 @@ func TestCreditNoteRequest_Update(t *testing.T) {
 		})
 
 		c.Assert(err == nil, qt.IsTrue)
-		assertCreditNoteResponse(c, result)
+		assertCreditNoteWithCustomerResponse(c, result)
 	})
 }
 
@@ -587,12 +662,12 @@ func TestCreditNoteRequest_Void(t *testing.T) {
 		server := lt.NewMockServer(c).
 			MatchMethod("PUT").
 			MatchPath("/api/v1/credit_notes/1a901a90-1a90-1a90-1a90-1a901a901a90/void").
-			MockResponse(mockCreditNoteResponse)
+			MockResponse(mockCreditNoteWithCustomerResponse)
 		defer server.Close()
 
 		result, err := server.Client().CreditNote().Void(context.Background(), creditNoteUUID)
 		c.Assert(err == nil, qt.IsTrue)
-		assertCreditNoteResponse(c, result)
+		assertCreditNoteWithCustomerResponse(c, result)
 	})
 }
 
@@ -656,5 +731,111 @@ func TestCreditNoteRequest_Estimate(t *testing.T) {
 
 		c.Assert(err == nil, qt.IsTrue)
 		assertCreditNoteEstimateResponse(c, result)
+	})
+}
+
+func TestCreditNoteRequest_ReplaceMetadata(t *testing.T) {
+	t.Run("When replace metadata is called", func(t *testing.T) {
+		c := qt.New(t)
+
+		creditNoteUUID, _ := uuid.Parse("1a901a90-1a90-1a90-1a90-1a901a901a90")
+
+		server := lt.ServerWithAssertions(c, mockMetadataResponse, func(c *qt.C, r *http.Request) {
+			c.Assert(r.Method, qt.Equals, "POST")
+			c.Assert(r.URL.Path, qt.Equals, "/api/v1/credit_notes/1a901a90-1a90-1a90-1a90-1a901a901a90/metadata")
+
+			body, err := io.ReadAll(r.Body)
+			c.Assert(err, qt.IsNil)
+
+			var requestData map[string]interface{}
+			err = json.Unmarshal(body, &requestData)
+			c.Assert(err, qt.IsNil)
+
+			c.Assert(requestData["metadata"], qt.IsNotNil)
+		})
+		defer server.Close()
+
+		client := New().SetBaseURL(server.URL).SetApiKey("test_api_key")
+		bar := "bar"
+		result, err := client.CreditNote().ReplaceMetadata(context.Background(), creditNoteUUID, map[string]*string{
+			"foo": &bar,
+			"baz": nil,
+		})
+
+		c.Assert(err == nil, qt.IsTrue)
+		c.Assert(result["foo"], qt.IsNotNil)
+		c.Assert(*result["foo"], qt.Equals, "bar")
+		c.Assert(result["baz"], qt.IsNil)
+	})
+}
+
+func TestCreditNoteRequest_MergeMetadata(t *testing.T) {
+	t.Run("When merge metadata is called", func(t *testing.T) {
+		c := qt.New(t)
+
+		creditNoteUUID, _ := uuid.Parse("1a901a90-1a90-1a90-1a90-1a901a901a90")
+
+		server := lt.ServerWithAssertions(c, mockMetadataResponse, func(c *qt.C, r *http.Request) {
+			c.Assert(r.Method, qt.Equals, "PATCH")
+			c.Assert(r.URL.Path, qt.Equals, "/api/v1/credit_notes/1a901a90-1a90-1a90-1a90-1a901a901a90/metadata")
+
+			body, err := io.ReadAll(r.Body)
+			c.Assert(err, qt.IsNil)
+
+			var requestData map[string]interface{}
+			err = json.Unmarshal(body, &requestData)
+			c.Assert(err, qt.IsNil)
+
+			c.Assert(requestData["metadata"], qt.IsNotNil)
+		})
+		defer server.Close()
+
+		client := New().SetBaseURL(server.URL).SetApiKey("test_api_key")
+		qux := "qux"
+		result, err := client.CreditNote().MergeMetadata(context.Background(), creditNoteUUID, map[string]*string{
+			"foo": &qux,
+		})
+
+		c.Assert(err == nil, qt.IsTrue)
+		c.Assert(result["foo"], qt.IsNotNil)
+		c.Assert(*result["foo"], qt.Equals, "bar")
+		c.Assert(result["baz"], qt.IsNil)
+	})
+}
+
+func TestCreditNoteRequest_DeleteAllMetadata(t *testing.T) {
+	t.Run("When delete all metadata is called", func(t *testing.T) {
+		c := qt.New(t)
+
+		creditNoteUUID, _ := uuid.Parse("1a901a90-1a90-1a90-1a90-1a901a901a90")
+
+		server := lt.NewMockServer(c).
+			MatchMethod("DELETE").
+			MatchPath("/api/v1/credit_notes/1a901a90-1a90-1a90-1a90-1a901a901a90/metadata").
+			MockResponse(mockNullMetadataResponse)
+		defer server.Close()
+
+		result, err := server.Client().CreditNote().DeleteAllMetadata(context.Background(), creditNoteUUID)
+		c.Assert(err == nil, qt.IsTrue)
+		c.Assert(result, qt.IsNil)
+	})
+}
+
+func TestCreditNoteRequest_DeleteMetadataKey(t *testing.T) {
+	t.Run("When delete metadata key is called", func(t *testing.T) {
+		c := qt.New(t)
+
+		creditNoteUUID, _ := uuid.Parse("1a901a90-1a90-1a90-1a90-1a901a901a90")
+
+		server := lt.NewMockServer(c).
+			MatchMethod("DELETE").
+			MatchPath("/api/v1/credit_notes/1a901a90-1a90-1a90-1a90-1a901a901a90/metadata/foo").
+			MockResponse(mockMetadataResponse)
+		defer server.Close()
+
+		result, err := server.Client().CreditNote().DeleteMetadataKey(context.Background(), creditNoteUUID, "foo")
+		c.Assert(err == nil, qt.IsTrue)
+		c.Assert(result["foo"], qt.IsNotNil)
+		c.Assert(*result["foo"], qt.Equals, "bar")
 	})
 }

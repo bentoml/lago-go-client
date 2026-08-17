@@ -5,10 +5,94 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/google/uuid"
 
 	. "github.com/bentoml/lago-go-client"
 	lt "github.com/bentoml/lago-go-client/testing"
 )
+
+// Mock response for customer get
+var mockCustomerGetResponse = `{
+	"customer": {
+		"lago_id": "1a901a90-1a90-1a90-1a90-1a901a901a90",
+		"sequential_id": 1,
+		"slug": "LAG-1234-001",
+		"external_id": "CUSTOMER_1",
+		"billing_entity_code": "acme_corp",
+		"name": "John Doe",
+		"firstname": "John",
+		"lastname": "Doe",
+		"customer_type": "company",
+		"email": "customer@example.com",
+		"address_line1": "5230 Penfield Ave",
+		"address_line2": null,
+		"city": "Woodland Hills",
+		"state": "CA",
+		"zipcode": "91364",
+		"country": "US",
+		"legal_name": "Acme Corp",
+		"legal_number": "123456789",
+		"net_payment_term": 30,
+		"tax_identification_number": "US123456789",
+		"logo_url": "https://getlago.com/logo.png",
+		"phone": "+1-555-123-4567",
+		"url": "https://acme.com",
+		"finalize_zero_amount_invoice": "finalize",
+		"billing_configuration": {
+			"invoice_grace_period": 3,
+			"subscription_invoice_issuing_date_anchor": "current_period_end",
+			"subscription_invoice_issuing_date_adjustment": "keep_anchor",
+			"payment_provider": "stripe",
+			"payment_provider_code": "stripe_123",
+			"provider_customer_id": "cus_123456",
+			"sync_with_provider": true,
+			"document_locale": "en",
+			"provider_payment_methods": ["card", "sepa_debit"]
+		},
+		"shipping_address": {
+			"address_line1": "123 Shipping St",
+			"address_line2": "Suite 456",
+			"city": "Shipping City",
+			"zipcode": "12345",
+			"state": "NY",
+			"country": "US"
+		},
+		"integration_customers": [
+			{
+				"lago_id": "2b902b90-2b90-2b90-2b90-2b902b902b90",
+				"external_customer_id": "netsuite_123",
+				"type": "netsuite",
+				"integration_code": "netsuite_integration",
+				"subsidiary_id": "sub_123",
+				"sync_with_provider": true
+			}
+		],
+		"metadata": [
+			{
+				"lago_id": "3c903c90-3c90-3c90-3c90-3c903c903c90",
+				"key": "department",
+				"value": "engineering",
+				"display_in_invoice": true,
+				"created_at": "2022-04-29T08:59:51Z"
+			}
+		],
+		"error_details": [
+			{
+   			"lago_id": "4c904c90-4c90-4c90-4c90-4c904c904c90",
+      	"error_code": "tax_error",
+        "details": { "tax_error": ["customerAddressCouldNotResolve: Service failure"] }
+			}
+		],
+		"currency": "USD",
+		"timezone": "America/New_York",
+		"applicable_timezone": "America/New_York",
+		"skip_invoice_custom_sections": false,
+		"taxes": [],
+		"applicable_invoice_custom_sections": [],
+		"created_at": "2022-04-29T08:59:51Z",
+		"updated_at": "2022-04-29T08:59:51Z"
+	}
+}`
 
 // Mock response for customer list
 var mockCustomerListResponse = `{
@@ -40,6 +124,8 @@ var mockCustomerListResponse = `{
 			"finalize_zero_amount_invoice": "finalize",
 			"billing_configuration": {
 				"invoice_grace_period": 3,
+				"subscription_invoice_issuing_date_anchor": "current_period_end",
+				"subscription_invoice_issuing_date_adjustment": "keep_anchor",
 				"payment_provider": "stripe",
 				"payment_provider_code": "stripe_123",
 				"provider_customer_id": "cus_123456",
@@ -110,6 +196,8 @@ var mockCustomerListResponse = `{
 			"finalize_zero_amount_invoice": "skip",
 			"billing_configuration": {
 				"invoice_grace_period": 5,
+				"subscription_invoice_issuing_date_anchor": "current_period_end",
+				"subscription_invoice_issuing_date_adjustment": "keep_anchor",
 				"payment_provider": "adyen",
 				"payment_provider_code": "adyen_456",
 				"provider_customer_id": "adyen_customer_789",
@@ -192,6 +280,7 @@ var mockCustomerCreditNoteListResponse = map[string]any{
 			"sub_total_excluding_taxes_amount_cents":  100,
 			"max_creditable_amount_cents":             100,
 			"max_refundable_amount_cents":             100,
+			"max_offsettable_amount_cents":            100,
 			"precise_coupons_adjustment_amount_cents": "0.0",
 			"created_at":                              "2022-04-29T08:59:51Z",
 			"updated_at":                              "2022-04-29T08:59:51Z",
@@ -222,6 +311,7 @@ var mockCustomerPaymentListResponse = map[string]any{
 			"external_payment_id":  "ext_payment_123",
 			"created_at":           "2022-04-29T08:59:51Z",
 			"invoice_ids":          []string{"1a901a90-1a90-1a90-1a90-1a901a901a90"},
+			"invoice_numbers":      []string{"LAG-1234-001-002"},
 			"external_customer_id": "CUSTOMER_1",
 		},
 	},
@@ -335,6 +425,117 @@ var mockCustomerSubscriptionListResponse = map[string]any{
 		"total_pages":  1,
 		"total_count":  1,
 	},
+}
+
+var mockCustomerCheckoutUrlResponse = map[string]any{
+	"customer": map[string]any{
+		"lago_customer_id":      "1a901a90-1a90-1a90-1a90-1a901a901a90",
+		"external_customer_id":  "CUSTOMER_1",
+		"payment_provider":      "stripe",
+		"payment_provider_code": "Stripe Provider",
+		"checkout_url":          "https://example.com",
+	},
+}
+
+var mockCustomerCreateResponse = `{
+	"customer": {
+		"lago_id": "1a901a90-1a90-1a90-1a90-1a901a901a90",
+		"external_id": "CUSTOMER_1"
+	}
+}`
+
+func TestCustomerRequest_Create(t *testing.T) {
+	t.Run("When integration_customers has no id, the placeholder UUID is omitted", func(t *testing.T) {
+		c := qt.New(t)
+
+		server := lt.NewMockServer(c).
+			MatchMethod("POST").
+			MatchPath("/api/v1/customers").
+			MatchJSONBody(`{
+				"customer": {
+					"external_id": "CUSTOMER_1",
+					"billing_configuration": {
+						"subscription_invoice_issuing_date_anchor": null,
+						"subscription_invoice_issuing_date_adjustment": null
+					},
+					"shipping_address": {},
+					"integration_customers": [
+						{
+							"external_customer_id": "netsuite_123",
+							"integration_type": "netsuite",
+							"integration_code": "netsuite_integration",
+							"sync_with_provider": true
+						}
+					]
+				}
+			}`).
+			MockResponse(mockCustomerCreateResponse)
+		defer server.Close()
+
+		result, err := server.Client().Customer().Create(context.Background(), &CustomerInput{
+			ExternalID: "CUSTOMER_1",
+			IntegrationCustomers: []IntegrationCustomer{
+				{
+					ExternalCustomerId: "netsuite_123",
+					IntegrationType:    IntegrationNetsuite,
+					IntegrationCode:    "netsuite_integration",
+					SyncWithProvider:   true,
+				},
+			},
+		})
+		c.Assert(err == nil, qt.IsTrue)
+		c.Assert(result, qt.DeepEquals, &Customer{
+			LagoID:     uuid.MustParse("1a901a90-1a90-1a90-1a90-1a901a901a90"),
+			ExternalID: "CUSTOMER_1",
+		})
+	})
+
+	t.Run("When integration_customers includes a real id, it is sent", func(t *testing.T) {
+		c := qt.New(t)
+
+		server := lt.NewMockServer(c).
+			MatchMethod("POST").
+			MatchPath("/api/v1/customers").
+			MatchJSONBody(`{
+				"customer": {
+					"external_id": "CUSTOMER_1",
+					"billing_configuration": {
+						"subscription_invoice_issuing_date_anchor": null,
+						"subscription_invoice_issuing_date_adjustment": null
+					},
+					"shipping_address": {},
+					"integration_customers": [
+						{
+							"id": "2b902b90-2b90-2b90-2b90-2b902b902b90",
+							"external_customer_id": "netsuite_123",
+							"integration_type": "netsuite",
+							"integration_code": "netsuite_integration",
+							"sync_with_provider": true
+						}
+					]
+				}
+			}`).
+			MockResponse(mockCustomerCreateResponse)
+		defer server.Close()
+
+		result, err := server.Client().Customer().Create(context.Background(), &CustomerInput{
+			ExternalID: "CUSTOMER_1",
+			IntegrationCustomers: []IntegrationCustomer{
+				{
+					LagoID:             uuid.MustParse("2b902b90-2b90-2b90-2b90-2b902b902b90"),
+					ExternalCustomerId: "netsuite_123",
+					IntegrationType:    IntegrationNetsuite,
+					IntegrationCode:    "netsuite_integration",
+					SyncWithProvider:   true,
+				},
+			},
+		})
+		c.Assert(err == nil, qt.IsTrue)
+		c.Assert(result, qt.DeepEquals, &Customer{
+			LagoID:     uuid.MustParse("1a901a90-1a90-1a90-1a90-1a901a901a90"),
+			ExternalID: "CUSTOMER_1",
+		})
+	})
 }
 
 func TestCustomerRequest_GetInvoiceList(t *testing.T) {
@@ -784,5 +985,158 @@ func TestCustomerRequest_GetList(t *testing.T) {
 			c.Assert(customer.ExternalID, qt.Not(qt.Equals), "")
 			c.Assert(customer.Name, qt.Not(qt.Equals), "")
 		}
+	})
+}
+
+func TestCustomerCheckoutUrl(t *testing.T) {
+	t.Run("When the server is not reachable", func(t *testing.T) {
+		c := qt.New(t)
+
+		client := New().SetBaseURL("http://localhost:88888").SetApiKey("test_api_key")
+		result, err := client.Customer().CheckoutUrl(context.Background(), "CUSTOMER_1")
+		c.Assert(result, qt.IsNil)
+		c.Assert(err.Error(), qt.Equals, `{"status":0,"error":"","code":"","err":"Post \"http://localhost:88888/api/v1/customers/CUSTOMER_1/checkout_url\": dial tcp: address 88888: invalid port"}`)
+	})
+
+	t.Run("When receiving a response", func(t *testing.T) {
+		c := qt.New(t)
+
+		server := lt.NewMockServer(c).
+			MatchMethod("POST").
+			MatchPath("/api/v1/customers/CUSTOMER_1/checkout_url").
+			MockResponse(mockCustomerCheckoutUrlResponse)
+		defer server.Close()
+
+		result, err := server.Client().Customer().CheckoutUrl(context.Background(), "CUSTOMER_1")
+		c.Assert(err == nil, qt.IsTrue)
+
+		c.Assert(result.LagoCustomerID.String(), qt.Equals, "1a901a90-1a90-1a90-1a90-1a901a901a90")
+		c.Assert(result.ExternalCustomerID, qt.Equals, "CUSTOMER_1")
+		c.Assert(result.PaymentProvider, qt.Equals, PaymentProviderStripe)
+		c.Assert(result.PaymentProviderCode, qt.Equals, "Stripe Provider")
+		c.Assert(result.CheckoutUrl, qt.Equals, "https://example.com")
+	})
+}
+
+var mockCustomerCurrentUsageResponse = map[string]any{
+	"customer_usage": map[string]any{
+		"from_datetime":      "2022-07-01T00:00:00Z",
+		"to_datetime":        "2022-07-31T23:59:59Z",
+		"issuing_date":       "2022-07-31",
+		"lago_invoice_id":    "1a901a90-1a90-1a90-1a90-1a901a901a90",
+		"currency":           "EUR",
+		"amount_cents":       123,
+		"total_amount_cents": 150,
+		"taxes_amount_cents": 27,
+		"charges_usage":      []map[string]any{},
+	},
+}
+
+func TestCustomerRequest_CurrentUsage(t *testing.T) {
+	t.Run("When the server is not reachable", func(t *testing.T) {
+		c := qt.New(t)
+
+		client := New().SetBaseURL("http://localhost:88888").SetApiKey("test_api_key")
+		result, err := client.Customer().CurrentUsage(context.Background(), "CUSTOMER_1", &CustomerUsageInput{
+			ExternalSubscriptionID: "SUB_1",
+		})
+		c.Assert(result, qt.IsNil)
+		c.Assert(err.Error(), qt.Equals, "{\"status\":0,\"error\":\"\",\"code\":\"\",\"err\":\"Get \\\"http://localhost:88888/api/v1/customers/CUSTOMER_1/current_usage?apply_taxes=false\\u0026external_subscription_id=SUB_1\\\": dial tcp: address 88888: invalid port\"}")
+	})
+
+	filterTests := []struct {
+		name  string
+		input CustomerUsageInput
+		query string
+	}{
+		{
+			name:  "charge_id",
+			input: CustomerUsageInput{ChargeID: "charge_123"},
+			query: "external_subscription_id=SUB_1&apply_taxes=false&charge_id=charge_123",
+		},
+		{
+			name:  "charge_code",
+			input: CustomerUsageInput{ChargeCode: "my_charge"},
+			query: "external_subscription_id=SUB_1&apply_taxes=false&charge_code=my_charge",
+		},
+		{
+			name:  "billable_metric_code",
+			input: CustomerUsageInput{BillableMetricCode: "my_metric"},
+			query: "external_subscription_id=SUB_1&apply_taxes=false&billable_metric_code=my_metric",
+		},
+		{
+			name:  "group",
+			input: CustomerUsageInput{Group: map[string]string{"region": "us-east-1"}},
+			query: "external_subscription_id=SUB_1&apply_taxes=false&group[region]=us-east-1",
+		},
+		{
+			name:  "full_usage",
+			input: CustomerUsageInput{FullUsage: true},
+			query: "external_subscription_id=SUB_1&apply_taxes=false&full_usage=true",
+		},
+		{
+			name:  "filter_by_charge_id (deprecated)",
+			input: CustomerUsageInput{FilterByChargeID: "charge_123"},
+			query: "external_subscription_id=SUB_1&apply_taxes=false&filter_by_charge_id=charge_123",
+		},
+		{
+			name:  "filter_by_charge_code (deprecated)",
+			input: CustomerUsageInput{FilterByChargeCode: "my_charge"},
+			query: "external_subscription_id=SUB_1&apply_taxes=false&filter_by_charge_code=my_charge",
+		},
+		{
+			name:  "filter_by_group (deprecated)",
+			input: CustomerUsageInput{FilterByGroup: map[string]string{"region": "us-east-1"}},
+			query: "external_subscription_id=SUB_1&apply_taxes=false&filter_by_group[region]=us-east-1",
+		},
+	}
+
+	for _, tt := range filterTests {
+		t.Run("When using "+tt.name, func(t *testing.T) {
+			c := qt.New(t)
+
+			tt.input.ExternalSubscriptionID = "SUB_1"
+			server := lt.NewMockServer(c).
+				MatchMethod("GET").
+				MatchPath("/api/v1/customers/CUSTOMER_1/current_usage").
+				MatchQuery(tt.query).
+				MockResponse(mockCustomerCurrentUsageResponse)
+			defer server.Close()
+
+			result, err := server.Client().Customer().CurrentUsage(context.Background(), "CUSTOMER_1", &tt.input)
+			c.Assert(err == nil, qt.IsTrue)
+			c.Assert(result.AmountCents, qt.Equals, 123)
+		})
+	}
+}
+
+func TestCustomerRequest_Get(t *testing.T) {
+	t.Run("When the server is not reachable", func(t *testing.T) {
+		c := qt.New(t)
+
+		client := New().SetBaseURL("http://localhost:88888").SetApiKey("test_api_key")
+		result, err := client.Customer().Get(context.Background(), "CUSTOMER_1")
+		c.Assert(result, qt.IsNil)
+		c.Assert(err.Error(), qt.Equals, `{"status":0,"error":"","code":"","err":"Get \"http://localhost:88888/api/v1/customers/CUSTOMER_1\": dial tcp: address 88888: invalid port"}`)
+	})
+
+	t.Run("When receiving a response", func(t *testing.T) {
+		c := qt.New(t)
+
+		server := lt.NewMockServer(c).
+			MatchMethod("GET").
+			MatchPath("/api/v1/customers/CUSTOMER_1").
+			MockResponse(mockCustomerGetResponse)
+		defer server.Close()
+
+		result, err := server.Client().Customer().Get(context.Background(), "CUSTOMER_1")
+		c.Assert(err == nil, qt.IsTrue)
+
+		c.Assert(result.LagoID.String(), qt.Equals, "1a901a90-1a90-1a90-1a90-1a901a901a90")
+		c.Assert(result.ExternalID, qt.Equals, "CUSTOMER_1")
+		c.Assert(result.SequentialID, qt.Equals, 1)
+		c.Assert(result.ErrorDetails, qt.HasLen, 1)
+		c.Assert(result.ErrorDetails[0].ErrorCode, qt.Equals, "tax_error")
+		c.Assert(result.ErrorDetails[0].Details["tax_error"], qt.DeepEquals, []any{"customerAddressCouldNotResolve: Service failure"})
 	})
 }

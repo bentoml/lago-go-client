@@ -15,9 +15,12 @@ import (
 type CustomerPaymentProvider string
 
 const (
-	PaymentProviderAdyen      CustomerPaymentProvider = "adyen"
-	PaymentProviderStripe     CustomerPaymentProvider = "stripe"
-	PaymentProviderGocardless CustomerPaymentProvider = "gocardless"
+	PaymentProviderAdyen       CustomerPaymentProvider = "adyen"
+	PaymentProviderCashfree    CustomerPaymentProvider = "cashfree"
+	PaymentProviderFlutterwave CustomerPaymentProvider = "flutterwave"
+	PaymentProviderGocardless  CustomerPaymentProvider = "gocardless"
+	PaymentProviderMoneyHash   CustomerPaymentProvider = "moneyhash"
+	PaymentProviderStripe      CustomerPaymentProvider = "stripe"
 )
 
 type FinalizeZeroAmountInvoice string
@@ -31,9 +34,12 @@ const (
 type IntegrationType string
 
 const (
-	IntegrationNetsuite IntegrationType = "netsuite"
-	IntegrationAnrok    IntegrationType = "anrok"
-	IntegrationXero     IntegrationType = "xero"
+	IntegrationAnrok      IntegrationType = "anrok"
+	IntegrationHubspot    IntegrationType = "hubspot"
+	IntegrationNetsuite   IntegrationType = "netsuite"
+	IntegrationOkta       IntegrationType = "okta"
+	IntegrationSalesforce IntegrationType = "salesforce"
+	IntegrationXero       IntegrationType = "xero"
 )
 
 type CustomerType string
@@ -158,24 +164,28 @@ type CustomerListInput struct {
 }
 
 type CustomerBillingConfigurationInput struct {
-	InvoiceGracePeriod     int                         `json:"invoice_grace_period,omitempty"`
-	PaymentProvider        CustomerPaymentProvider     `json:"payment_provider,omitempty"`
-	PaymentProviderCode    string                      `json:"payment_provider_code,omitempty"`
-	ProviderCustomerID     string                      `json:"provider_customer_id,omitempty"`
-	Sync                   bool                        `json:"sync,omitempty"`
-	SyncWithProvider       bool                        `json:"sync_with_provider,omitempty"`
-	DocumentLocale         string                      `json:"document_locale,omitempty"`
-	ProviderPaymentMethods []ProviderPaymentMethodType `json:"provider_payment_methods,omitempty"`
+	InvoiceGracePeriod                       int                                           `json:"invoice_grace_period,omitempty"`
+	SubscriptionInvoiceIssuingDateAnchor     *SubscriptionInvoiceIssuingDateAnchorType     `json:"subscription_invoice_issuing_date_anchor"`
+	SubscriptionInvoiceIssuingDateAdjustment *SubscriptionInvoiceIssuingDateAdjustmentType `json:"subscription_invoice_issuing_date_adjustment"`
+	PaymentProvider                          CustomerPaymentProvider                       `json:"payment_provider,omitempty"`
+	PaymentProviderCode                      string                                        `json:"payment_provider_code,omitempty"`
+	ProviderCustomerID                       string                                        `json:"provider_customer_id,omitempty"`
+	Sync                                     bool                                          `json:"sync,omitempty"`
+	SyncWithProvider                         bool                                          `json:"sync_with_provider,omitempty"`
+	DocumentLocale                           string                                        `json:"document_locale,omitempty"`
+	ProviderPaymentMethods                   []ProviderPaymentMethodType                   `json:"provider_payment_methods,omitempty"`
 }
 
 type CustomerBillingConfiguration struct {
-	InvoiceGracePeriod     int                         `json:"invoice_grace_period,omitempty"`
-	PaymentProvider        CustomerPaymentProvider     `json:"payment_provider,omitempty"`
-	PaymentProviderCode    string                      `json:"payment_provider_code,omitempty"`
-	ProviderCustomerID     string                      `json:"provider_customer_id,omitempty"`
-	SyncWithProvider       bool                        `json:"sync_with_provider,omitempty"`
-	DocumentLocale         string                      `json:"document_locale,omitempty"`
-	ProviderPaymentMethods []ProviderPaymentMethodType `json:"provider_payment_methods,omitempty"`
+	InvoiceGracePeriod                       int                                          `json:"invoice_grace_period,omitempty"`
+	SubscriptionInvoiceIssuingDateAnchor     SubscriptionInvoiceIssuingDateAnchorType     `json:"subscription_invoice_issuing_date_anchor,omitempty"`
+	SubscriptionInvoiceIssuingDateAdjustment SubscriptionInvoiceIssuingDateAdjustmentType `json:"subscription_invoice_issuing_date_adjustment,omitempty"`
+	PaymentProvider                          CustomerPaymentProvider                      `json:"payment_provider,omitempty"`
+	PaymentProviderCode                      string                                       `json:"payment_provider_code,omitempty"`
+	ProviderCustomerID                       string                                       `json:"provider_customer_id,omitempty"`
+	SyncWithProvider                         bool                                         `json:"sync_with_provider,omitempty"`
+	DocumentLocale                           string                                       `json:"document_locale,omitempty"`
+	ProviderPaymentMethods                   []ProviderPaymentMethodType                  `json:"provider_payment_methods,omitempty"`
 }
 
 type Address struct {
@@ -196,6 +206,20 @@ type IntegrationCustomer struct {
 	SyncWithProvider   bool            `json:"sync_with_provider,omitempty"`
 }
 
+func (ic IntegrationCustomer) MarshalJSON() ([]byte, error) {
+	type Alias IntegrationCustomer
+	out := &struct {
+		Alias
+		LagoID *uuid.UUID `json:"id,omitempty"`
+	}{
+		Alias: Alias(ic),
+	}
+	if ic.LagoID != uuid.Nil {
+		out.LagoID = &ic.LagoID
+	}
+	return json.Marshal(out)
+}
+
 type IntegrationCustomersResponse struct {
 	LagoID             uuid.UUID       `json:"lago_id,omitempty"`
 	ExternalCustomerId string          `json:"external_customer_id,omitempty"`
@@ -206,15 +230,16 @@ type IntegrationCustomersResponse struct {
 }
 
 type CustomerChargeUsage struct {
-	Units              string                       `json:"units,omitempty"`
-	EventsCount        int                          `json:"events_count"`
-	AmountCents        int                          `json:"amount_cents,omitempty"`
-	AmountCurrency     Currency                     `json:"amount_currency,omitempty"`
-	Charge             *Charge                      `json:"charge,omitempty"`
-	BillableMetric     *BillableMetric              `json:"billable_metric,omitempty"`
-	PricingUnitDetails *CustomerPricingUnitDetails  `json:"pricing_unit_details,omitempty"`
-	Filters            []CustomerChargeFilterUsage  `json:"filters,omitempty"`
-	GroupedUsage       []CustomerChargeGroupedUsage `json:"grouped_usage,omitempty"`
+	TotalAggregatedUnits string                       `json:"total_aggregated_units,omitempty"`
+	Units                string                       `json:"units,omitempty"`
+	EventsCount          int                          `json:"events_count"`
+	AmountCents          int                          `json:"amount_cents,omitempty"`
+	AmountCurrency       Currency                     `json:"amount_currency,omitempty"`
+	Charge               *Charge                      `json:"charge,omitempty"`
+	BillableMetric       *BillableMetric              `json:"billable_metric,omitempty"`
+	PricingUnitDetails   *CustomerPricingUnitDetails  `json:"pricing_unit_details,omitempty"`
+	Filters              []CustomerChargeFilterUsage  `json:"filters,omitempty"`
+	GroupedUsage         []CustomerChargeGroupedUsage `json:"grouped_usage,omitempty"`
 }
 
 type CustomerProjectedChargeUsage struct {
@@ -238,12 +263,13 @@ type CustomerPricingUnitDetails struct {
 }
 
 type CustomerChargeFilterUsage struct {
-	InvoiceDisplayName string                      `json:"invoice_display_name,omitempty"`
-	Values             map[string]interface{}      `json:"value,omitempty"`
-	AmountCents        int                         `json:"amount_cents,omitempty"`
-	EventsCount        int                         `json:"events_count,omitempty"`
-	Units              string                      `json:"units,omitempty"`
-	PricingUnitDetails *CustomerPricingUnitDetails `json:"pricing_unit_details,omitempty"`
+	TotalAggregatedUnits string                      `json:"total_aggregated_units,omitempty"`
+	InvoiceDisplayName   string                      `json:"invoice_display_name,omitempty"`
+	Values               map[string]interface{}      `json:"value,omitempty"`
+	AmountCents          int                         `json:"amount_cents,omitempty"`
+	EventsCount          int                         `json:"events_count,omitempty"`
+	Units                string                      `json:"units,omitempty"`
+	PricingUnitDetails   *CustomerPricingUnitDetails `json:"pricing_unit_details,omitempty"`
 }
 
 type CustomerProjectedChargeFilterUsage struct {
@@ -258,12 +284,13 @@ type CustomerProjectedChargeFilterUsage struct {
 }
 
 type CustomerChargeGroupedUsage struct {
-	AmountCents        int                         `json:"amount_cents,omitempty"`
-	EventsCount        int                         `json:"events_count,omitempty"`
-	Units              string                      `json:"units,omitempty"`
-	GroupedBy          map[string]interface{}      `json:"grouped_by,omitempty"`
-	Filters            []CustomerChargeFilterUsage `json:"filters,omitempty"`
-	PricingUnitDetails *CustomerPricingUnitDetails `json:"pricing_unit_details,omitempty"`
+	TotalAggregatedUnits string                      `json:"total_aggregated_units,omitempty"`
+	AmountCents          int                         `json:"amount_cents,omitempty"`
+	EventsCount          int                         `json:"events_count,omitempty"`
+	Units                string                      `json:"units,omitempty"`
+	GroupedBy            map[string]interface{}      `json:"grouped_by,omitempty"`
+	Filters              []CustomerChargeFilterUsage `json:"filters,omitempty"`
+	PricingUnitDetails   *CustomerPricingUnitDetails `json:"pricing_unit_details,omitempty"`
 }
 
 type CustomerProjectedChargeGroupedUsage struct {
@@ -307,12 +334,28 @@ type CustomerPortalUrl struct {
 }
 
 type CustomerCheckoutUrl struct {
-	CheckoutUrl string `json:"checkout_url,omitempty"`
+	LagoCustomerID      uuid.UUID               `json:"lago_customer_id"`
+	ExternalCustomerID  string                  `json:"external_customer_id"`
+	PaymentProvider     CustomerPaymentProvider `json:"payment_provider"`
+	PaymentProviderCode string                  `json:"payment_provider_code,omitempty"`
+	CheckoutUrl         string                  `json:"checkout_url,omitempty"`
 }
 
 type CustomerUsageInput struct {
-	ExternalSubscriptionID string `json:"external_subscription_id,omitempty"`
-	ApplyTaxes             bool   `json:"apply_taxes,omitempty"`
+	ExternalSubscriptionID string            `json:"external_subscription_id,omitempty"`
+	ApplyTaxes             bool              `json:"apply_taxes,omitempty"`
+	ChargeID               string            `json:"charge_id,omitempty"`
+	ChargeCode             string            `json:"charge_code,omitempty"`
+	BillableMetricCode     string            `json:"billable_metric_code,omitempty"`
+	Group                  map[string]string `json:"group,omitempty"`
+	FullUsage              bool              `json:"full_usage,omitempty"`
+
+	// Deprecated: Use ChargeID instead.
+	FilterByChargeID string `json:"filter_by_charge_id,omitempty"`
+	// Deprecated: Use ChargeCode instead.
+	FilterByChargeCode string `json:"filter_by_charge_code,omitempty"`
+	// Deprecated: Use Group instead.
+	FilterByGroup map[string]string `json:"filter_by_group,omitempty"`
 }
 
 type CustomerPastUsageInput struct {
@@ -433,9 +476,16 @@ type Customer struct {
 
 	Taxes                           []Tax                  `json:"taxes,omitempty"`
 	ApplicableInvoiceCustomSections []InvoiceCustomSection `json:"applicable_invoice_custom_sections,omitempty"`
+	ErrorDetails                    []CustomerErrorDetail  `json:"error_details,omitempty"`
 
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
+}
+
+type CustomerErrorDetail struct {
+	LagoId    uuid.UUID      `json:"lago_id,omitempty"`
+	ErrorCode string         `json:"error_code,omitempty"`
+	Details   map[string]any `json:"details,omitempty"`
 }
 
 type CustomerRequest struct {
@@ -484,6 +534,31 @@ func (cr *CustomerRequest) CurrentUsage(ctx context.Context, externalCustomerID 
 	queryParams := map[string]string{
 		"external_subscription_id": customerUsageInput.ExternalSubscriptionID,
 		"apply_taxes":              strconv.FormatBool(customerUsageInput.ApplyTaxes),
+	}
+
+	if customerUsageInput.ChargeID != "" {
+		queryParams["charge_id"] = customerUsageInput.ChargeID
+	}
+	if customerUsageInput.ChargeCode != "" {
+		queryParams["charge_code"] = customerUsageInput.ChargeCode
+	}
+	if customerUsageInput.BillableMetricCode != "" {
+		queryParams["billable_metric_code"] = customerUsageInput.BillableMetricCode
+	}
+	for k, v := range customerUsageInput.Group {
+		queryParams[fmt.Sprintf("group[%s]", k)] = v
+	}
+	if customerUsageInput.FilterByChargeID != "" {
+		queryParams["filter_by_charge_id"] = customerUsageInput.FilterByChargeID
+	}
+	if customerUsageInput.FilterByChargeCode != "" {
+		queryParams["filter_by_charge_code"] = customerUsageInput.FilterByChargeCode
+	}
+	for k, v := range customerUsageInput.FilterByGroup {
+		queryParams[fmt.Sprintf("filter_by_group[%s]", k)] = v
+	}
+	if customerUsageInput.FullUsage {
+		queryParams["full_usage"] = "true"
 	}
 
 	clientRequest := &ClientRequest{

@@ -17,6 +17,7 @@ const (
 	SubscriptionStatusPending    SubscriptionStatus = "pending"
 	SubscriptionStatusTerminated SubscriptionStatus = "terminated"
 	SubscriptionStatusCanceled   SubscriptionStatus = "canceled"
+	SubscriptionStatusIncomplete SubscriptionStatus = "incomplete"
 )
 
 type BillingTime string
@@ -31,6 +32,7 @@ type OnTerminationCreditNote string
 const (
 	OnTerminationCreditNoteCredit OnTerminationCreditNote = "credit"
 	OnTerminationCreditNoteRefund OnTerminationCreditNote = "refund"
+	OnTerminationCreditNoteOffset OnTerminationCreditNote = "offset"
 	OnTerminationCreditNoteSkip   OnTerminationCreditNote = "skip"
 )
 
@@ -40,6 +42,46 @@ const (
 	OnTerminationInvoiceGenerate OnTerminationInvoice = "generate"
 	OnTerminationInvoiceSkip     OnTerminationInvoice = "skip"
 )
+
+type SubscriptionCancellationReason string
+
+const (
+	SubscriptionCancellationReasonPaymentFailed SubscriptionCancellationReason = "payment_failed"
+	SubscriptionCancellationReasonTimeout       SubscriptionCancellationReason = "timeout"
+)
+
+type SubscriptionActivationRuleType string
+
+const (
+	SubscriptionActivationRuleTypePayment SubscriptionActivationRuleType = "payment"
+)
+
+type SubscriptionActivationRuleStatus string
+
+const (
+	SubscriptionActivationRuleStatusInactive      SubscriptionActivationRuleStatus = "inactive"
+	SubscriptionActivationRuleStatusPending       SubscriptionActivationRuleStatus = "pending"
+	SubscriptionActivationRuleStatusSatisfied     SubscriptionActivationRuleStatus = "satisfied"
+	SubscriptionActivationRuleStatusDeclined      SubscriptionActivationRuleStatus = "declined"
+	SubscriptionActivationRuleStatusFailed        SubscriptionActivationRuleStatus = "failed"
+	SubscriptionActivationRuleStatusExpired       SubscriptionActivationRuleStatus = "expired"
+	SubscriptionActivationRuleStatusNotApplicable SubscriptionActivationRuleStatus = "not_applicable"
+)
+
+type SubscriptionActivationRuleInput struct {
+	Type         SubscriptionActivationRuleType `json:"type"`
+	TimeoutHours int                            `json:"timeout_hours,omitempty"`
+}
+
+type SubscriptionActivationRule struct {
+	LagoID       uuid.UUID                        `json:"lago_id,omitempty"`
+	Type         SubscriptionActivationRuleType   `json:"type,omitempty"`
+	TimeoutHours int                              `json:"timeout_hours,omitempty"`
+	Status       SubscriptionActivationRuleStatus `json:"status,omitempty"`
+	ExpiresAt    *time.Time                       `json:"expires_at,omitempty"`
+	CreatedAt    time.Time                        `json:"created_at,omitempty"`
+	UpdatedAt    time.Time                        `json:"updated_at,omitempty"`
+}
 
 type SubscriptionRequest struct {
 	client *Client
@@ -81,20 +123,27 @@ type PlanOverridesInput struct {
 	AmountCurrency     Currency                         `json:"amount_currency,omitempty"`
 	TrialPeriod        float32                          `json:"trial_period"`
 	Charges            []ChargeOverridesInput           `json:"charges,omitempty"`
+	FixedCharges       []FixedChargeOverridesInput      `json:"fixed_charges,omitempty"`
 	MinimumCommitment  *MinimumCommitmentOverridesInput `json:"minimum_commitment"`
 	TaxCodes           []string                         `json:"tax_codes,omitempty"`
 	UsageThresholds    []UsageThreshold                 `json:"usage_thresholds,omitempty"`
 }
 
 type SubscriptionInput struct {
-	ExternalCustomerID string              `json:"external_customer_id,omitempty"`
-	PlanCode           string              `json:"plan_code,omitempty"`
-	SubscriptionAt     *time.Time          `json:"subscription_at,omitempty"`
-	EndingAt           *time.Time          `json:"ending_at,omitempty"`
-	BillingTime        BillingTime         `json:"billing_time,omitempty"`
-	PlanOverrides      *PlanOverridesInput `json:"plan_overrides,omitempty"`
-	ExternalID         string              `json:"external_id"`
-	Name               string              `json:"name"`
+	ExternalCustomerID   string                            `json:"external_customer_id,omitempty"`
+	PlanCode             string                            `json:"plan_code,omitempty"`
+	SubscriptionAt       *time.Time                        `json:"subscription_at,omitempty"`
+	EndingAt             *time.Time                        `json:"ending_at,omitempty"`
+	BillingTime          BillingTime                       `json:"billing_time,omitempty"`
+	PlanOverrides        *PlanOverridesInput               `json:"plan_overrides,omitempty"`
+	ExternalID           string                            `json:"external_id"`
+	Name                 string                            `json:"name"`
+	PaymentMethod        *PaymentMethodInput               `json:"payment_method,omitempty"`
+	InvoiceCustomSection *InvoiceCustomSectionInput        `json:"invoice_custom_section,omitempty"`
+	ConsolidateInvoice   *bool                             `json:"consolidate_invoice,omitempty"`
+	BillingEntityCode    string                            `json:"billing_entity_code,omitempty"`
+	PurchaseOrderNumber  *string                           `json:"purchase_order_number,omitempty"`
+	ActivationRules      []SubscriptionActivationRuleInput `json:"activation_rules,omitempty"`
 }
 
 type SubscriptionsInput struct {
@@ -113,9 +162,11 @@ type SubscriptionTerminateInput struct {
 type SubscriptionListInput struct {
 	ExternalCustomerID string               `url:"external_customer_id,omitempty"`
 	PlanCode           string               `url:"plan_code,omitempty"`
+	Currency           Currency             `url:"currency,omitempty"`
 	PerPage            *int                 `url:"per_page,omitempty"`
 	Page               *int                 `url:"page,omitempty"`
 	Status             []SubscriptionStatus `url:"status[],omitempty"`
+	BillingEntityCodes []string             `url:"billing_entity_codes[],omitempty"`
 }
 
 type Subscription struct {
@@ -123,8 +174,12 @@ type Subscription struct {
 	LagoCustomerID     uuid.UUID `json:"lago_customer_id"`
 	ExternalCustomerID string    `json:"external_customer_id"`
 	ExternalID         string    `json:"external_id"`
+	BillingEntityCode  string    `json:"billing_entity_code,omitempty"`
 
 	PlanCode string `json:"plan_code"`
+
+	PlanAmountCents    int      `json:"plan_amount_cents"`
+	PlanAmountCurrency Currency `json:"plan_amount_currency"`
 
 	Name string `json:"name"`
 
@@ -135,6 +190,8 @@ type Subscription struct {
 	TrialEndedAt            *time.Time              `json:"trial_ended_at"`
 	OnTerminationCreditNote OnTerminationCreditNote `json:"on_termination_credit_note,omitempty"`
 	OnTerminationInvoice    OnTerminationInvoice    `json:"on_termination_invoice,omitempty"`
+	ConsolidateInvoice      bool                    `json:"consolidate_invoice"`
+	PurchaseOrderNumber     *string                 `json:"purchase_order_number,omitempty"`
 
 	PreviousPlanCode  string `json:"previous_plan_code"`
 	NextPlanCode      string `json:"next_plan_code"`
@@ -147,10 +204,18 @@ type Subscription struct {
 
 	Entitlements []SubscriptionEntitlement `json:"entitlements,omitempty"`
 
+	PaymentMethod *PaymentMethodInput `json:"payment_method,omitempty"`
+
+	AppliedInvoiceCustomSections []AppliedInvoiceCustomSection `json:"applied_invoice_custom_sections,omitempty"`
+
 	CreatedAt    time.Time  `json:"created_at"`
 	StartedAt    *time.Time `json:"started_at"`
 	CanceledAt   *time.Time `json:"canceled_at"`
 	TerminatedAt *time.Time `json:"terminated_at"`
+	ActivatedAt  *time.Time `json:"activated_at,omitempty"`
+
+	CancellationReason SubscriptionCancellationReason `json:"cancellation_reason,omitempty"`
+	ActivationRules    []SubscriptionActivationRule   `json:"activation_rules,omitempty"`
 }
 
 func (c *Client) Subscription() *SubscriptionRequest {
@@ -284,4 +349,26 @@ func (sr *SubscriptionRequest) Update(ctx context.Context, subscriptionInput *Su
 	}
 
 	return subscriptionResult.Subscription, nil
+}
+
+func (sr *SubscriptionRequest) GetFixedCharges(ctx context.Context, subscriptionExternalID string, subscriptionStatus ...string) (*FixedChargeResult, *Error) {
+	subPath := fmt.Sprintf("%s/%s/%s", "subscriptions", subscriptionExternalID, "fixed_charges")
+
+	clientRequest := &ClientRequest{
+		Path:        subPath,
+		QueryParams: statusQueryParams(subscriptionStatus),
+		Result:      &FixedChargeResult{},
+	}
+
+	result, err := sr.client.Get(ctx, clientRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	fixedChargeResult, ok := result.(*FixedChargeResult)
+	if !ok {
+		return nil, &ErrorTypeAssert
+	}
+
+	return fixedChargeResult, nil
 }

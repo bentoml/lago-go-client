@@ -21,6 +21,8 @@ var mockSubscriptionResponse = `{
     "billing_time": "anniversary",
     "name": "Repository A",
     "plan_code": "premium",
+    "plan_amount_cents": 10000,
+    "plan_amount_currency": "USD",
     "status": "terminated",
     "created_at": "2022-08-08T00:00:00Z",
     "canceled_at": "2022-09-14T16:35:31Z",
@@ -34,8 +36,42 @@ var mockSubscriptionResponse = `{
     "trial_ended_at": "2022-08-08T00:00:00Z",
     "on_termination_credit_note": "skip",
     "on_termination_invoice": "skip",
+    "consolidate_invoice": true,
+    "purchase_order_number": "PO-123",
+    "activated_at": "2022-08-08T00:00:00Z",
+    "cancellation_reason": "payment_failed",
+    "activation_rules": [
+      {
+        "lago_id": "3c903c90-3c90-3c90-3c90-3c903c903c90",
+        "type": "payment",
+        "timeout_hours": 48,
+        "status": "pending",
+        "expires_at": "2022-08-10T00:00:00Z",
+        "created_at": "2022-08-08T00:00:00Z",
+        "updated_at": "2022-08-08T00:00:00Z"
+      }
+    ],
+    "payment_method": {
+      "payment_method_type": "card",
+      "payment_method_id": "pm_123456"
+    },
     "current_billing_period_started_at": "2022-08-08T00:00:00Z",
     "current_billing_period_ending_at": "2022-09-08T00:00:00Z",
+    "applied_invoice_custom_sections": [
+      {
+        "lago_id": "1a901a90-1a90-1a90-1a90-1a901a901a90",
+        "invoice_custom_section_id": "2b902b90-2b90-2b90-2b90-2b902b902b90",
+        "created_at": "2022-08-08T00:00:00Z",
+        "invoice_custom_section": {
+          "lago_id": "2b902b90-2b90-2b90-2b90-2b902b902b90",
+          "code": "section_code",
+          "name": "Section Name",
+          "description": "Section description",
+          "details": "Section details",
+          "display_name": "Display Name"
+        }
+      }
+    ],
     "plan": {
       "lago_id": "1a901a90-1a90-1a90-1a90-1a901a901a90",
       "name": "Startup",
@@ -284,6 +320,7 @@ func TestSubscriptionRequest_Terminate(t *testing.T) {
 	for _, onTerminationCreditNote := range []OnTerminationCreditNote{
 		OnTerminationCreditNoteCredit,
 		OnTerminationCreditNoteRefund,
+		OnTerminationCreditNoteOffset,
 		OnTerminationCreditNoteSkip,
 	} {
 		title := fmt.Sprintf("When providing the on_termination_credit_note=%s parameter", onTerminationCreditNote)
@@ -333,4 +370,235 @@ func TestSubscriptionRequest_Terminate(t *testing.T) {
 			assertSubscriptionTerminateResponse(c, subscription)
 		})
 	}
+}
+
+func TestSubscriptionRequest_CreateWithPaymentMethod(t *testing.T) {
+	t.Run("When creating a subscription with a not found payment method", func(t *testing.T) {
+		c := qt.New(t)
+
+		server := lt.NewMockServer(c).
+			MatchMethod("POST").
+			MatchPath("/api/v1/subscriptions").
+			MatchJSONBody(`{
+				"subscription": {
+					"external_customer_id": "5eb02857-a71e-4ea2-bcf9-57d3a41bc6ba",
+					"plan_code": "premium",
+					"external_id": "my_sub_1",
+					"name": "Repository A",
+					"billing_time": "anniversary",
+					"payment_method": {
+						"payment_method_type": "provider",
+						"payment_method_id": "pm_not_found"
+					}
+				}
+			}`).
+			MockResponseWithCode(404, map[string]any{
+				"status": 404,
+				"error":  "Not Found",
+				"code":   "resource_not_found",
+			})
+		defer server.Close()
+
+		result, err := server.Client().Subscription().Create(context.Background(), &SubscriptionInput{
+			ExternalCustomerID: "5eb02857-a71e-4ea2-bcf9-57d3a41bc6ba",
+			PlanCode:           "premium",
+			ExternalID:         "my_sub_1",
+			Name:               "Repository A",
+			BillingTime:        Anniversary,
+			PaymentMethod: &PaymentMethodInput{
+				PaymentMethodType: "provider",
+				PaymentMethodID:   "pm_not_found",
+			},
+		})
+		c.Assert(result, qt.IsNil)
+		c.Assert(err, qt.IsNotNil)
+		c.Assert(err.HTTPStatusCode, qt.Equals, 404)
+		c.Assert(err.Message, qt.Equals, "Not Found")
+		c.Assert(err.ErrorCode, qt.Equals, "resource_not_found")
+	})
+
+	t.Run("When creating a subscription with a payment method", func(t *testing.T) {
+		c := qt.New(t)
+
+		consolidate := true
+		purchaseOrderNumber := "PO-123"
+
+		server := lt.NewMockServer(c).
+			MatchMethod("POST").
+			MatchPath("/api/v1/subscriptions").
+			MatchJSONBody(`{
+				"subscription": {
+					"external_customer_id": "5eb02857-a71e-4ea2-bcf9-57d3a41bc6ba",
+					"plan_code": "premium",
+					"external_id": "my_sub_1",
+					"name": "Repository A",
+					"billing_time": "anniversary",
+					"payment_method": {
+						"payment_method_type": "card",
+						"payment_method_id": "pm_123456"
+					},
+					"consolidate_invoice": true,
+					"purchase_order_number": "PO-123"
+				}
+			}`).
+			MockResponse(mockSubscriptionResponse)
+		defer server.Close()
+
+		subscription, err := server.Client().Subscription().Create(context.Background(), &SubscriptionInput{
+			ExternalCustomerID: "5eb02857-a71e-4ea2-bcf9-57d3a41bc6ba",
+			PlanCode:           "premium",
+			ExternalID:         "my_sub_1",
+			Name:               "Repository A",
+			BillingTime:        Anniversary,
+			PaymentMethod: &PaymentMethodInput{
+				PaymentMethodType: "card",
+				PaymentMethodID:   "pm_123456",
+			},
+			ConsolidateInvoice:  &consolidate,
+			PurchaseOrderNumber: &purchaseOrderNumber,
+		})
+
+		c.Assert(err == nil, qt.IsTrue)
+		c.Assert(subscription.PaymentMethod, qt.IsNotNil)
+		c.Assert(subscription.PaymentMethod.PaymentMethodType, qt.Equals, "card")
+		c.Assert(subscription.PaymentMethod.PaymentMethodID, qt.Equals, "pm_123456")
+		c.Assert(subscription.ConsolidateInvoice, qt.IsTrue)
+		c.Assert(subscription.PurchaseOrderNumber, qt.DeepEquals, Ptr("PO-123"))
+		c.Assert(subscription.AppliedInvoiceCustomSections, qt.HasLen, 1)
+		c.Assert(subscription.AppliedInvoiceCustomSections[0].LagoId.String(), qt.Equals, "1a901a90-1a90-1a90-1a90-1a901a901a90")
+		c.Assert(subscription.AppliedInvoiceCustomSections[0].InvoiceCustomSectionId.String(), qt.Equals, "2b902b90-2b90-2b90-2b90-2b902b902b90")
+		c.Assert(subscription.AppliedInvoiceCustomSections[0].InvoiceCustomSection.LagoId.String(), qt.Equals, "2b902b90-2b90-2b90-2b90-2b902b902b90")
+		c.Assert(subscription.AppliedInvoiceCustomSections[0].InvoiceCustomSection.Name, qt.Equals, "Section Name")
+		c.Assert(subscription.AppliedInvoiceCustomSections[0].InvoiceCustomSection.Code, qt.Equals, "section_code")
+		c.Assert(subscription.CancellationReason, qt.Equals, SubscriptionCancellationReasonPaymentFailed)
+		c.Assert(subscription.ActivatedAt, qt.IsNotNil)
+		c.Assert(subscription.ActivationRules, qt.HasLen, 1)
+		c.Assert(subscription.ActivationRules[0].Type, qt.Equals, SubscriptionActivationRuleTypePayment)
+		c.Assert(subscription.ActivationRules[0].TimeoutHours, qt.Equals, 48)
+		c.Assert(subscription.ActivationRules[0].Status, qt.Equals, SubscriptionActivationRuleStatusPending)
+	})
+}
+
+func TestSubscriptionRequest_CreateWithInvoiceCustomSections(t *testing.T) {
+	t.Run("When creating a subscription with invoice custom sections", func(t *testing.T) {
+		c := qt.New(t)
+
+		server := lt.NewMockServer(c).
+			MatchMethod("POST").
+			MatchPath("/api/v1/subscriptions").
+			MatchJSONBody(`{
+				"subscription": {
+					"external_customer_id": "5eb02857-a71e-4ea2-bcf9-57d3a41bc6ba",
+					"plan_code": "premium",
+					"external_id": "my_sub_1",
+					"name": "Repository A",
+					"billing_time": "anniversary",
+					"invoice_custom_section": {
+						"invoice_custom_section_codes": ["section_1", "section_2"],
+						"skip_invoice_custom_sections": true
+					}
+				}
+			}`).
+			MockResponse(mockSubscriptionResponse)
+		defer server.Close()
+
+		subscription, err := server.Client().Subscription().Create(context.Background(), &SubscriptionInput{
+			ExternalCustomerID: "5eb02857-a71e-4ea2-bcf9-57d3a41bc6ba",
+			PlanCode:           "premium",
+			ExternalID:         "my_sub_1",
+			Name:               "Repository A",
+			BillingTime:        Anniversary,
+			InvoiceCustomSection: &InvoiceCustomSectionInput{
+				InvoiceCustomSectionCodes: []string{"section_1", "section_2"},
+				SkipInvoiceCustomSections: true,
+			},
+		})
+
+		c.Assert(err == nil, qt.IsTrue)
+		c.Assert(subscription.AppliedInvoiceCustomSections, qt.HasLen, 1)
+		c.Assert(subscription.AppliedInvoiceCustomSections[0].LagoId.String(), qt.Equals, "1a901a90-1a90-1a90-1a90-1a901a901a90")
+		c.Assert(subscription.AppliedInvoiceCustomSections[0].InvoiceCustomSectionId.String(), qt.Equals, "2b902b90-2b90-2b90-2b90-2b902b902b90")
+		c.Assert(subscription.AppliedInvoiceCustomSections[0].InvoiceCustomSection.Name, qt.Equals, "Section Name")
+	})
+}
+
+func TestSubscriptionRequest_UpdateWithPaymentMethod(t *testing.T) {
+	t.Run("When updating a subscription with an invalid payment method", func(t *testing.T) {
+		c := qt.New(t)
+
+		server := lt.NewMockServer(c).
+			MatchMethod("PUT").
+			MatchPath("/api/v1/subscriptions/my_sub_1").
+			MatchJSONBody(`{
+				"subscription": {
+					"external_id": "my_sub_1",
+					"name": "Repository A",
+					"payment_method": {
+						"payment_method_type": "invalid",
+						"payment_method_id": "pm_invalid"
+					}
+				}
+			}`).
+			MockResponseWithCode(422, map[string]any{
+				"status": 422,
+				"error":  "Unprocessable Entity",
+				"code":   "validation_errors",
+				"error_details": map[string]any{
+					"payment_method": []string{"invalid_payment_method"},
+				},
+			})
+		defer server.Close()
+
+		result, err := server.Client().Subscription().Update(context.Background(), &SubscriptionInput{
+			ExternalID: "my_sub_1",
+			Name:       "Repository A",
+			PaymentMethod: &PaymentMethodInput{
+				PaymentMethodType: "invalid",
+				PaymentMethodID:   "pm_invalid",
+			},
+		})
+		c.Assert(result, qt.IsNil)
+		c.Assert(err, qt.IsNotNil)
+		c.Assert(err.HTTPStatusCode, qt.Equals, 422)
+		c.Assert(err.Message, qt.Equals, "Unprocessable Entity")
+		c.Assert(err.ErrorCode, qt.Equals, "validation_errors")
+		c.Assert(err.ErrorDetail, qt.IsNotNil)
+		details, detailErr := err.ErrorDetail.Details()
+		c.Assert(detailErr, qt.IsNil)
+		c.Assert(details["payment_method"], qt.DeepEquals, []string{"invalid_payment_method"})
+	})
+
+	t.Run("When updating a subscription with a payment method", func(t *testing.T) {
+		c := qt.New(t)
+
+		server := lt.NewMockServer(c).
+			MatchMethod("PUT").
+			MatchPath("/api/v1/subscriptions/my_sub_1").
+			MatchJSONBody(`{
+				"subscription": {
+					"external_id": "my_sub_1",
+					"name": "Repository A",
+					"payment_method": {
+						"payment_method_type": "card",
+						"payment_method_id": "pm_789"
+					}
+				}
+			}`).
+			MockResponse(mockSubscriptionResponse)
+		defer server.Close()
+
+		subscription, err := server.Client().Subscription().Update(context.Background(), &SubscriptionInput{
+			ExternalID: "my_sub_1",
+			Name:       "Repository A",
+			PaymentMethod: &PaymentMethodInput{
+				PaymentMethodType: "card",
+				PaymentMethodID:   "pm_789",
+			},
+		})
+
+		c.Assert(err == nil, qt.IsTrue)
+		c.Assert(subscription.PaymentMethod, qt.IsNotNil)
+		c.Assert(subscription.PaymentMethod.PaymentMethodType, qt.Equals, "card")
+		c.Assert(subscription.PaymentMethod.PaymentMethodID, qt.Equals, "pm_123456")
+	})
 }

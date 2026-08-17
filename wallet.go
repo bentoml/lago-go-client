@@ -2,10 +2,10 @@ package lago
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/google/go-querystring/query"
 	"github.com/google/uuid"
 )
 
@@ -31,25 +31,33 @@ type RecurringTransactionRuleInput struct {
 	TransactionMetadata              []WalletTransactionMetadata `json:"transaction_metadata,omitempty"`
 	TransactionName                  string                      `json:"transaction_name,omitempty"`
 	IgnorePaidTopUpLimits            *bool                       `json:"ignore_paid_top_up_limits,omitempty"`
+	GrantsTargetTopUp                *bool                       `json:"grants_target_top_up,omitempty"`
+	PurchaseOrderNumber              *string                     `json:"purchase_order_number,omitempty"`
+	PaymentMethod                    *PaymentMethodInput         `json:"payment_method,omitempty"`
+	InvoiceCustomSection             *InvoiceCustomSectionInput  `json:"invoice_custom_section,omitempty"`
 }
 
 type RecurringTransactionRuleResponse struct {
-	LagoID                           uuid.UUID                   `json:"lago_id,omitempty"`
-	Interval                         string                      `json:"interval,omitempty"`
-	Method                           string                      `json:"method,omitempty"`
-	StartedAt                        *time.Time                  `json:"started_at,omitempty"`
-	ExpirationAt                     *time.Time                  `json:"expiration_at,omitempty"`
-	Status                           Status                      `json:"status,omitempty"`
-	TargetOngoingBalance             string                      `json:"target_ongoing_balance,omitempty"`
-	ThresholdCredits                 string                      `json:"threshold_credits,omitempty"`
-	Trigger                          string                      `json:"trigger,omitempty"`
-	PaidCredits                      string                      `json:"paid_credits,omitempty"`
-	GrantedCredits                   string                      `json:"granted_credits,omitempty"`
-	CreatedAt                        time.Time                   `json:"created_at,omitempty"`
-	InvoiceRequiresSuccessfulPayment bool                        `json:"invoice_requires_successful_payment,omitempty"`
-	TransactionMetadata              []WalletTransactionMetadata `json:"transaction_metadata,omitempty"`
-	TransactionName                  string                      `json:"transaction_name,omitempty"`
-	IgnorePaidTopUpLimits            bool                        `json:"ignore_paid_top_up_limits"`
+	LagoID                           uuid.UUID                     `json:"lago_id,omitempty"`
+	Interval                         string                        `json:"interval,omitempty"`
+	Method                           string                        `json:"method,omitempty"`
+	StartedAt                        *time.Time                    `json:"started_at,omitempty"`
+	ExpirationAt                     *time.Time                    `json:"expiration_at,omitempty"`
+	Status                           Status                        `json:"status,omitempty"`
+	TargetOngoingBalance             string                        `json:"target_ongoing_balance,omitempty"`
+	ThresholdCredits                 string                        `json:"threshold_credits,omitempty"`
+	Trigger                          string                        `json:"trigger,omitempty"`
+	PaidCredits                      string                        `json:"paid_credits,omitempty"`
+	GrantedCredits                   string                        `json:"granted_credits,omitempty"`
+	CreatedAt                        time.Time                     `json:"created_at,omitempty"`
+	InvoiceRequiresSuccessfulPayment bool                          `json:"invoice_requires_successful_payment,omitempty"`
+	TransactionMetadata              []WalletTransactionMetadata   `json:"transaction_metadata,omitempty"`
+	TransactionName                  string                        `json:"transaction_name,omitempty"`
+	IgnorePaidTopUpLimits            bool                          `json:"ignore_paid_top_up_limits"`
+	GrantsTargetTopUp                *bool                         `json:"grants_target_top_up,omitempty"`
+	PurchaseOrderNumber              *string                       `json:"purchase_order_number,omitempty"`
+	PaymentMethod                    *PaymentMethodInput           `json:"payment_method,omitempty"`
+	AppliedInvoiceCustomSections     []AppliedInvoiceCustomSection `json:"applied_invoice_custom_sections,omitempty"`
 }
 
 type WalletRequest struct {
@@ -69,6 +77,8 @@ type WalletInput struct {
 	RateAmount                       string                          `json:"rate_amount,omitempty"`
 	Currency                         Currency                        `json:"currency,omitempty"`
 	Name                             string                          `json:"name,omitempty"`
+	Code                             *string                         `json:"code,omitempty"`
+	Priority                         *int                            `json:"priority,omitempty"`
 	PaidCredits                      string                          `json:"paid_credits,omitempty"`
 	GrantedCredits                   string                          `json:"granted_credits,omitempty"`
 	ExpirationAt                     *time.Time                      `json:"expiration_at,omitempty"`
@@ -81,18 +91,33 @@ type WalletInput struct {
 	PaidTopUpMaxAmountCents          *int                            `json:"paid_top_up_max_amount_cents,omitempty"`
 	PaidTopUpMinAmountCents          *int                            `json:"paid_top_up_min_amount_cents,omitempty"`
 	IgnorePaidTopUpLimitsOnCreation  *bool                           `json:"ignore_paid_top_up_limits_on_creation,omitempty"`
+	Metadata                         map[string]string               `json:"metadata,omitempty"`
+	PaymentMethod                    *PaymentMethodInput             `json:"payment_method,omitempty"`
+	InvoiceCustomSection             *InvoiceCustomSectionInput      `json:"invoice_custom_section,omitempty"`
+	BillingEntityCode                string                          `json:"billing_entity_code,omitempty"`
+	PurchaseOrderNumber              *string                         `json:"purchase_order_number,omitempty"`
 }
 
 type WalletListInput struct {
-	PerPage            *int   `json:"per_page,omitempty,string"`
-	Page               *int   `json:"page,omitempty,string"`
-	ExternalCustomerID string `json:"external_customer_id,omitempty"`
+	PerPage            *int     `url:"per_page,omitempty"`
+	Page               *int     `url:"page,omitempty"`
+	ExternalCustomerID string   `url:"external_customer_id,omitempty"`
+	BillingEntityCodes []string `url:"billing_entity_codes[],omitempty"`
+	Currency           Currency `url:"currency,omitempty"`
 }
 
 type WalletResult struct {
 	Wallet  *Wallet  `json:"wallet,omitempty"`
 	Wallets []Wallet `json:"wallets,omitempty"`
 	Meta    Metadata `json:"meta,omitempty"`
+}
+
+type WalletMetadataResult struct {
+	Metadata map[string]*string `json:"metadata"`
+}
+
+type WalletMetadataParams struct {
+	Metadata map[string]*string `json:"metadata"`
 }
 
 type Wallet struct {
@@ -102,6 +127,8 @@ type Wallet struct {
 	Status                           Status                             `json:"status,omitempty"`
 	Currency                         Currency                           `json:"currency,omitempty"`
 	Name                             string                             `json:"name,omitempty"`
+	Code                             *string                            `json:"code,omitempty"`
+	Priority                         int                                `json:"priority"`
 	RateAmount                       string                             `json:"rate_amount,omitempty"`
 	CreditsBalance                   string                             `json:"credits_balance,omitempty"`
 	BalanceCents                     int                                `json:"balance_cents,omitempty"`
@@ -113,6 +140,7 @@ type Wallet struct {
 	LastConsumedCreditAt             time.Time                          `json:"last_consumed_credit_at,omitempty"`
 	TerminatedAt                     time.Time                          `json:"terminated_at,omitempty"`
 	RecurringTransactionRules        []RecurringTransactionRuleResponse `json:"recurring_transaction_rules,omitempty"`
+	BillingEntityCode                string                             `json:"billing_entity_code,omitempty"`
 	OngoingBalanceCents              int                                `json:"ongoing_balance_cents,omitempty"`
 	OngoingUsageBalanceCents         int                                `json:"ongoing_usage_balance_cents,omitempty"`
 	CreditsOngoingBalance            string                             `json:"credits_ongoing_balance,omitempty"`
@@ -120,6 +148,10 @@ type Wallet struct {
 	AppliesTo                        AppliesTo                          `json:"applies_to,omitempty"`
 	PaidTopUpMaxAmountCents          *int                               `json:"paid_top_up_max_amount_cents,omitempty"`
 	PaidTopUpMinAmountCents          *int                               `json:"paid_top_up_min_amount_cents,omitempty"`
+	Metadata                         map[string]string                  `json:"metadata,omitempty"`
+	PaymentMethod                    *PaymentMethodInput                `json:"payment_method,omitempty"`
+	AppliedInvoiceCustomSections     []AppliedInvoiceCustomSection      `json:"applied_invoice_custom_sections,omitempty"`
+	PurchaseOrderNumber              *string                            `json:"purchase_order_number,omitempty"`
 }
 
 func (c *Client) Wallet() *WalletRequest {
@@ -149,20 +181,15 @@ func (bmr *WalletRequest) Get(ctx context.Context, walletID string) (*Wallet, *E
 }
 
 func (bmr *WalletRequest) GetList(ctx context.Context, walletListInput *WalletListInput) (*WalletResult, *Error) {
-	jsonQueryParams, err := json.Marshal(walletListInput)
+	urlValues, err := query.Values(walletListInput)
 	if err != nil {
 		return nil, &Error{Err: err}
 	}
 
-	queryParams := make(map[string]string)
-	if err = json.Unmarshal(jsonQueryParams, &queryParams); err != nil {
-		return nil, &Error{Err: err}
-	}
-
 	clientRequest := &ClientRequest{
-		Path:        "wallets",
-		QueryParams: queryParams,
-		Result:      &WalletResult{},
+		Path:      "wallets",
+		UrlValues: urlValues,
+		Result:    &WalletResult{},
 	}
 
 	result, clientErr := bmr.client.Get(ctx, clientRequest)
@@ -245,4 +272,90 @@ func (bmr *WalletRequest) Delete(ctx context.Context, walletID string) (*Wallet,
 	}
 
 	return walletResult.Wallet, nil
+}
+
+func (bmr *WalletRequest) ReplaceMetadata(ctx context.Context, walletID string, metadata map[string]*string) (map[string]*string, *Error) {
+	subPath := fmt.Sprintf("%s/%s/%s", "wallets", walletID, "metadata")
+
+	clientRequest := &ClientRequest{
+		Path:   subPath,
+		Result: &WalletMetadataResult{},
+		Body:   &WalletMetadataParams{Metadata: metadata},
+	}
+
+	result, err := bmr.client.Post(ctx, clientRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	metadataResult, ok := result.(*WalletMetadataResult)
+	if !ok {
+		return nil, &ErrorTypeAssert
+	}
+
+	return metadataResult.Metadata, nil
+}
+
+func (bmr *WalletRequest) MergeMetadata(ctx context.Context, walletID string, metadata map[string]*string) (map[string]*string, *Error) {
+	subPath := fmt.Sprintf("%s/%s/%s", "wallets", walletID, "metadata")
+
+	clientRequest := &ClientRequest{
+		Path:   subPath,
+		Result: &WalletMetadataResult{},
+		Body:   &WalletMetadataParams{Metadata: metadata},
+	}
+
+	result, err := bmr.client.Patch(ctx, clientRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	metadataResult, ok := result.(*WalletMetadataResult)
+	if !ok {
+		return nil, &ErrorTypeAssert
+	}
+
+	return metadataResult.Metadata, nil
+}
+
+func (bmr *WalletRequest) DeleteAllMetadata(ctx context.Context, walletID string) (map[string]*string, *Error) {
+	subPath := fmt.Sprintf("%s/%s/%s", "wallets", walletID, "metadata")
+
+	clientRequest := &ClientRequest{
+		Path:   subPath,
+		Result: &WalletMetadataResult{},
+	}
+
+	result, err := bmr.client.Delete(ctx, clientRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	metadataResult, ok := result.(*WalletMetadataResult)
+	if !ok {
+		return nil, &ErrorTypeAssert
+	}
+
+	return metadataResult.Metadata, nil
+}
+
+func (bmr *WalletRequest) DeleteMetadataKey(ctx context.Context, walletID string, key string) (map[string]*string, *Error) {
+	subPath := fmt.Sprintf("%s/%s/%s/%s", "wallets", walletID, "metadata", key)
+
+	clientRequest := &ClientRequest{
+		Path:   subPath,
+		Result: &WalletMetadataResult{},
+	}
+
+	result, err := bmr.client.Delete(ctx, clientRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	metadataResult, ok := result.(*WalletMetadataResult)
+	if !ok {
+		return nil, &ErrorTypeAssert
+	}
+
+	return metadataResult.Metadata, nil
 }

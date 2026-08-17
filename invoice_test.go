@@ -261,25 +261,26 @@ func TestInvoiceRequest_GetList(t *testing.T) {
 			MatchMethod("GET").
 			MatchPath("/api/v1/invoices").
 			MatchQuery(map[string]interface{}{
-				"per_page":             "10",
-				"page":                 "1",
-				"external_customer_id": "CUSTOMER_1",
-				"invoice_type":         "subscription",
-				"status":               "finalized",
-				"payment_status":       "succeeded",
-				"issuing_date_from":    "2022-09-14T00:00:00Z",
-				"issuing_date_to":      "2022-09-14T23:59:59Z",
-				"amount_from":          "10",
-				"amount_to":            "1000",
-				"search_term":          "credit",
-				"billing_entity_ids[]": []string{"1a901a90-1a90-1a90-1a90-1a901a901a90", "1a901a90-1a90-1a90-1a90-1a901a901a91"},
-				"currency":             "EUR",
-				"payment_overdue":      "true",
-				"partially_paid":       "true",
-				"self_billed":          "false",
-				"payment_dispute_lost": "true",
-				"metadata[key1]":       "10",
-				"metadata[key2]":       "value2",
+				"per_page":              "10",
+				"page":                  "1",
+				"external_customer_id":  "CUSTOMER_1",
+				"invoice_type":          "subscription",
+				"status":                "finalized",
+				"payment_status":        "succeeded",
+				"issuing_date_from":     "2022-09-14T00:00:00Z",
+				"issuing_date_to":       "2022-09-14T23:59:59Z",
+				"amount_from":           "10",
+				"amount_to":             "1000",
+				"search_term":           "credit",
+				"billing_entity_ids[]":  []string{"1a901a90-1a90-1a90-1a90-1a901a901a90", "1a901a90-1a90-1a90-1a90-1a901a901a91"},
+				"currency":              "EUR",
+				"payment_overdue":       "true",
+				"partially_paid":        "true",
+				"self_billed":           "false",
+				"payment_dispute_lost":  "true",
+				"metadata[key1]":        "10",
+				"metadata[key2]":        "value2",
+				"purchase_order_number": "PO-123",
 			}).
 			MockResponse(mockInvoiceListResponse)
 		defer server.Close()
@@ -289,28 +290,55 @@ func TestInvoiceRequest_GetList(t *testing.T) {
 		entityUUID2, _ := uuid.Parse("1a901a90-1a90-1a90-1a90-1a901a901a91")
 
 		result, err := server.Client().Invoice().GetList(context.Background(), &InvoiceListInput{
-			PerPage:            Ptr(10),
-			Page:               Ptr(1),
-			IssuingDateFrom:    "2022-09-14T00:00:00Z",
-			IssuingDateTo:      "2022-09-14T23:59:59Z",
-			ExternalCustomerID: "CUSTOMER_1",
-			InvoiceType:        SubscriptionInvoiceType,
-			Status:             InvoiceStatusFinalized,
-			PaymentStatus:      InvoicePaymentStatusSucceeded,
-			AmountFrom:         Ptr(10),
-			AmountTo:           Ptr(1000),
-			SearchTerm:         "credit",
-			BillingEntityIDs:   []uuid.UUID{entityUUID, entityUUID2},
-			Currency:           EUR,
-			PaymentOverdue:     Ptr(true),
-			PartiallyPaid:      Ptr(true),
-			SelfBilled:         Ptr(false),
-			PaymentDisputeLost: Ptr(true),
-			Metadata:           &InvoiceListInputMetadata{"key1": 10, "key2": "value2"},
+			PerPage:             Ptr(10),
+			Page:                Ptr(1),
+			IssuingDateFrom:     "2022-09-14T00:00:00Z",
+			IssuingDateTo:       "2022-09-14T23:59:59Z",
+			ExternalCustomerID:  "CUSTOMER_1",
+			InvoiceType:         SubscriptionInvoiceType,
+			Status:              InvoiceStatusFinalized,
+			PaymentStatus:       InvoicePaymentStatusSucceeded,
+			AmountFrom:          Ptr(10),
+			AmountTo:            Ptr(1000),
+			SearchTerm:          "credit",
+			BillingEntityIDs:    []uuid.UUID{entityUUID, entityUUID2},
+			Currency:            EUR,
+			PaymentOverdue:      Ptr(true),
+			PartiallyPaid:       Ptr(true),
+			SelfBilled:          Ptr(false),
+			PaymentDisputeLost:  Ptr(true),
+			Metadata:            &InvoiceListInputMetadata{"key1": 10, "key2": "value2"},
+			PurchaseOrderNumber: "PO-123",
 		})
 
 		c.Assert(err == nil, qt.IsTrue)
 		assertInvoiceGetListResponse(c, result)
+	})
+}
+
+func TestInvoiceRequest_Delete(t *testing.T) {
+	t.Run("When the server is not reachable", func(t *testing.T) {
+		c := qt.New(t)
+
+		client := New().SetBaseURL("http://localhost:88888").SetApiKey("test_api_key")
+		result, err := client.Invoice().Delete(context.Background(), "1a901a90-1a90-1a90-1a90-1a901a901a90")
+		c.Assert(result, qt.IsNil)
+		c.Assert(err != nil, qt.IsTrue)
+	})
+
+	t.Run("With an invoiceID in the request", func(t *testing.T) {
+		c := qt.New(t)
+
+		server := lt.NewMockServer(c).
+			MatchMethod("DELETE").
+			MatchPath("/api/v1/invoices/1a901a90-1a90-1a90-1a90-1a901a901a90").
+			MockResponse(map[string]any{"invoice": mockInvoice})
+		defer server.Close()
+
+		result, err := server.Client().Invoice().Delete(context.Background(), "1a901a90-1a90-1a90-1a90-1a901a901a90")
+
+		c.Assert(err == nil, qt.IsTrue)
+		assertInvoiceResponse(c, result)
 	})
 }
 
@@ -337,5 +365,165 @@ func TestInvoiceRequest_PaymentUrl(t *testing.T) {
 
 		c.Assert(err == nil, qt.IsTrue)
 		assertPaymentUrlResponse(c, result)
+	})
+}
+
+func TestInvoiceRequest_RetryPayment(t *testing.T) {
+	t.Run("When retrying payment without a payment method", func(t *testing.T) {
+		c := qt.New(t)
+
+		server := lt.NewMockServer(c).
+			MatchMethod("POST").
+			MatchPath("/api/v1/invoices/1a901a90-1a90-1a90-1a90-1a901a901a90/retry_payment").
+			MockResponse(nil)
+		defer server.Close()
+
+		_, err := server.Client().Invoice().RetryPayment(context.Background(), "1a901a90-1a90-1a90-1a90-1a901a901a90")
+		c.Assert(err == nil, qt.IsTrue)
+	})
+
+	t.Run("When retrying payment with a payment method", func(t *testing.T) {
+		c := qt.New(t)
+
+		server := lt.NewMockServer(c).
+			MatchMethod("POST").
+			MatchPath("/api/v1/invoices/1a901a90-1a90-1a90-1a90-1a901a901a90/retry_payment").
+			MatchJSONBody(`{
+				"payment_method": {
+					"payment_method_type": "card",
+					"payment_method_id": "pm_123456"
+				}
+			}`).
+			MockResponse(nil)
+		defer server.Close()
+
+		_, err := server.Client().Invoice().RetryPayment(context.Background(), "1a901a90-1a90-1a90-1a90-1a901a901a90", &PaymentMethodInput{
+			PaymentMethodType: "card",
+			PaymentMethodID:   "pm_123456",
+		})
+		c.Assert(err == nil, qt.IsTrue)
+	})
+}
+
+func TestInvoiceRequest_CreateWithPaymentMethod(t *testing.T) {
+	t.Run("When creating a one-off invoice with an invalid payment method", func(t *testing.T) {
+		c := qt.New(t)
+
+		server := lt.NewMockServer(c).
+			MatchMethod("POST").
+			MatchPath("/api/v1/invoices").
+			MatchJSONBody(`{
+				"invoice": {
+					"external_customer_id": "CUSTOMER_1",
+					"currency": "USD",
+					"fees": [{"add_on_code": "setup_fee", "units": 1}],
+					"payment_method": {
+						"payment_method_type": "invalid",
+						"payment_method_id": "pm_invalid"
+					}
+				}
+			}`).
+			MockResponseWithCode(422, map[string]any{
+				"status": 422,
+				"error":  "Unprocessable Entity",
+				"code":   "validation_errors",
+				"error_details": map[string]any{
+					"payment_method": []string{"invalid_payment_method"},
+				},
+			})
+		defer server.Close()
+
+		result, err := server.Client().Invoice().Create(context.Background(), &InvoiceOneOffInput{
+			ExternalCustomerId: "CUSTOMER_1",
+			Currency:           "USD",
+			Fees: []InvoiceFeesInput{
+				{AddOnCode: "setup_fee", Units: 1},
+			},
+			PaymentMethod: &PaymentMethodInput{
+				PaymentMethodType: "invalid",
+				PaymentMethodID:   "pm_invalid",
+			},
+		})
+		c.Assert(result, qt.IsNil)
+		c.Assert(err, qt.IsNotNil)
+		c.Assert(err.HTTPStatusCode, qt.Equals, 422)
+		c.Assert(err.Message, qt.Equals, "Unprocessable Entity")
+		c.Assert(err.ErrorCode, qt.Equals, "validation_errors")
+		c.Assert(err.ErrorDetail, qt.IsNotNil)
+		details, detailErr := err.ErrorDetail.Details()
+		c.Assert(detailErr, qt.IsNil)
+		c.Assert(details["payment_method"], qt.DeepEquals, []string{"invalid_payment_method"})
+	})
+
+	t.Run("When creating a one-off invoice with a payment method", func(t *testing.T) {
+		c := qt.New(t)
+
+		server := lt.NewMockServer(c).
+			MatchMethod("POST").
+			MatchPath("/api/v1/invoices").
+			MatchJSONBody(`{
+				"invoice": {
+					"external_customer_id": "CUSTOMER_1",
+					"currency": "USD",
+					"fees": [{"add_on_code": "setup_fee", "units": 1}],
+					"payment_method": {
+						"payment_method_type": "card",
+						"payment_method_id": "pm_123456"
+					}
+				}
+			}`).
+			MockResponse(map[string]any{"invoice": mockInvoice})
+		defer server.Close()
+
+		result, err := server.Client().Invoice().Create(context.Background(), &InvoiceOneOffInput{
+			ExternalCustomerId: "CUSTOMER_1",
+			Currency:           "USD",
+			Fees: []InvoiceFeesInput{
+				{AddOnCode: "setup_fee", Units: 1},
+			},
+			PaymentMethod: &PaymentMethodInput{
+				PaymentMethodType: "card",
+				PaymentMethodID:   "pm_123456",
+			},
+		})
+		c.Assert(err == nil, qt.IsTrue)
+		c.Assert(result, qt.IsNotNil)
+		c.Assert(result.LagoID.String(), qt.Equals, "1a901a90-1a90-1a90-1a90-1a901a901a90")
+	})
+}
+
+func TestInvoiceRequest_CreateWithInvoiceCustomSections(t *testing.T) {
+	t.Run("When creating a one-off invoice with invoice custom sections", func(t *testing.T) {
+		c := qt.New(t)
+
+		server := lt.NewMockServer(c).
+			MatchMethod("POST").
+			MatchPath("/api/v1/invoices").
+			MatchJSONBody(`{
+				"invoice": {
+					"external_customer_id": "CUSTOMER_1",
+					"currency": "USD",
+					"fees": [{"add_on_code": "setup_fee", "units": 1}],
+					"invoice_custom_section": {
+						"invoice_custom_section_codes": ["section_1", "section_2"],
+						"skip_invoice_custom_sections": true
+					}
+				}
+			}`).
+			MockResponse(map[string]any{"invoice": mockInvoice})
+		defer server.Close()
+
+		result, err := server.Client().Invoice().Create(context.Background(), &InvoiceOneOffInput{
+			ExternalCustomerId: "CUSTOMER_1",
+			Currency:           "USD",
+			Fees:               []InvoiceFeesInput{{AddOnCode: "setup_fee", Units: 1}},
+			InvoiceCustomSection: &InvoiceCustomSectionInput{
+				InvoiceCustomSectionCodes: []string{"section_1", "section_2"},
+				SkipInvoiceCustomSections: true,
+			},
+		})
+		c.Assert(err == nil, qt.IsTrue)
+		c.Assert(result, qt.IsNotNil)
+		c.Assert(result.LagoID.String(), qt.Equals, "1a901a90-1a90-1a90-1a90-1a901a901a90")
 	})
 }

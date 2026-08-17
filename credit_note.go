@@ -56,6 +56,10 @@ type CreditNoteResult struct {
 	Meta        Metadata     `json:"meta,omitempty"`
 }
 
+type CreditNoteMetadataResult struct {
+	Metadata map[string]*string `json:"metadata"`
+}
+
 type EstimatedCreditNoteResult struct {
 	CreditNoteEstimated *EstimatedCreditNote `json:"estimated_credit_note"`
 }
@@ -71,14 +75,15 @@ type CreditNoteListInput struct {
 	AmountFrom int `url:"amount_from,omitempty,string"`
 	AmountTo   int `url:"amount_to,omitempty,string"`
 
-	SearchTerm       string                 `url:"search_term,omitempty"`
-	BillingEntityIDs []uuid.UUID            `url:"billing_entity_ids[],omitempty"`
-	CreditStatus     CreditNoteCreditStatus `url:"credit_status,omitempty"`
-	Currency         Currency               `url:"currency,omitempty"`
-	InvoiceNumber    string                 `url:"invoice_number,omitempty"`
-	Reason           CreditNoteReason       `url:"reason,omitempty"`
-	RefundStatus     CreditNoteRefundStatus `url:"refund_status,omitempty"`
-	SelfBilled       *bool                  `url:"self_billed,omitempty,string"`
+	SearchTerm          string                 `url:"search_term,omitempty"`
+	BillingEntityIDs    []uuid.UUID            `url:"billing_entity_ids[],omitempty"`
+	CreditStatus        CreditNoteCreditStatus `url:"credit_status,omitempty"`
+	Currency            Currency               `url:"currency,omitempty"`
+	InvoiceNumber       string                 `url:"invoice_number,omitempty"`
+	PurchaseOrderNumber string                 `url:"purchase_order_number,omitempty"`
+	Reason              CreditNoteReason       `url:"reason,omitempty"`
+	RefundStatus        CreditNoteRefundStatus `url:"refund_status,omitempty"`
+	SelfBilled          *bool                  `url:"self_billed,omitempty,string"`
 }
 
 type CreditNoteItem struct {
@@ -109,14 +114,15 @@ type CreditNoteErrorDetails struct {
 }
 
 type CreditNote struct {
-	LagoID            uuid.UUID        `json:"lago_id,omitempty"`
-	SequentialID      int              `json:"sequential_id,omitempty"`
-	BillingEntityCode string           `json:"billing_entity_code,omitempty"`
-	Number            string           `json:"number,omitempty"`
-	LagoInvoiceID     uuid.UUID        `json:"lago_invoice_id,omitempty"`
-	InvoiceNumber     string           `json:"invoice_number,omitempty"`
-	Reason            CreditNoteReason `json:"reason,omitempty"`
-	Description       string           `json:"description,omitempty"`
+	LagoID              uuid.UUID        `json:"lago_id,omitempty"`
+	SequentialID        int              `json:"sequential_id,omitempty"`
+	BillingEntityCode   string           `json:"billing_entity_code,omitempty"`
+	Number              string           `json:"number,omitempty"`
+	LagoInvoiceID       uuid.UUID        `json:"lago_invoice_id,omitempty"`
+	InvoiceNumber       string           `json:"invoice_number,omitempty"`
+	PurchaseOrderNumber *string          `json:"purchase_order_number,omitempty"`
+	Reason              CreditNoteReason `json:"reason,omitempty"`
+	Description         string           `json:"description,omitempty"`
 
 	SelfBilled   bool                   `json:"self_billed,omitempty"`
 	CreditStatus CreditNoteCreditStatus `json:"credit_status,omitempty"`
@@ -127,12 +133,15 @@ type CreditNote struct {
 	CreditAmountCents                 int      `json:"credit_amount_cents,omitempty"`
 	BalanceAmountCents                int      `json:"balance_amount_cents,omitempty"`
 	RefundAmountCents                 int      `json:"refund_amount_cents,omitempty"`
+	OffsetAmountCents                 int      `json:"offset_amount_cents,omitempty"`
 	TaxesAmountCents                  int      `json:"taxes_amount_cents,omitempty"`
 	TaxesRate                         float64  `json:"taxes_rate,omitempty"`
 	SubTotalExcludingTaxesAmountCents int      `json:"sub_total_excluding_taxes_amount_cents,omitempty"`
 	CouponsAdjustmentAmountCents      int      `json:"coupons_adjustment_amount_cents,omitempty"`
 
 	FileURL string `json:"file_url,omitempty"`
+
+	Customer *Customer `json:"customer,omitempty"`
 
 	IssuingDate string    `json:"issuing_date,omitempty"`
 	CreatedAt   time.Time `json:"created_at,omitempty"`
@@ -141,6 +150,7 @@ type CreditNote struct {
 	Items        []CreditNoteItem         `json:"items,omitempty"`
 	AppliedTaxes []CreditNoteAppliedTax   `json:"applied_taxes,omitempty"`
 	ErrorDetails []CreditNoteErrorDetails `json:"error_details,omitempty"`
+	Metadata     map[string]*string       `json:"metadata,omitempty"`
 }
 
 type EstimatedCreditNote struct {
@@ -150,6 +160,7 @@ type EstimatedCreditNote struct {
 	Currency                            Currency `json:"currency,omitempty"`
 	MaxCreditableAmountCents            int      `json:"max_creditable_amount_cents,omitempty"`
 	MaxRefundableAmountCents            int      `json:"max_refundable_amount_cents,omitempty"`
+	MaxOffsettableAmountCents           int      `json:"max_offsettable_amount_cents,omitempty"`
 	TaxesAmountCents                    int      `json:"taxes_amount_cents,omitempty"`
 	PreciseTaxesAmountCents             float64  `json:"precise_taxes_amount_cents,omitempty"`
 	TaxesRate                           float64  `json:"taxes_rate,omitempty"`
@@ -190,6 +201,7 @@ type CreditNoteInput struct {
 	Items             []CreditNoteItemInput `json:"items,omitempty"`
 	CreditAmountCents int                   `json:"credit_amount_cents,omitempty"`
 	RefundAmountCents int                   `json:"refund_amount_cents,omitempty"`
+	OffsetAmountCents int                   `json:"offset_amount_cents,omitempty"`
 }
 
 type CreditNoteUpdateInput struct {
@@ -208,6 +220,10 @@ type EstimateCreditNoteInput struct {
 
 type EstimateCreditNoteParams struct {
 	CreditNote *EstimateCreditNoteInput `json:"credit_note"`
+}
+
+type CreditNoteMetadataParams struct {
+	Metadata map[string]*string `json:"metadata"`
 }
 
 func (c *Client) CreditNote() *CreditNoteRequest {
@@ -378,4 +394,90 @@ func (cr *CreditNoteRequest) Estimate(ctx context.Context, estimateCreditNoteInp
 	}
 
 	return estimatedCreditNoteResult.CreditNoteEstimated, nil
+}
+
+func (cr *CreditNoteRequest) ReplaceMetadata(ctx context.Context, creditNoteID uuid.UUID, metadata map[string]*string) (map[string]*string, *Error) {
+	subPath := fmt.Sprintf("%s/%s/%s", "credit_notes", creditNoteID, "metadata")
+
+	clientRequest := &ClientRequest{
+		Path:   subPath,
+		Result: &CreditNoteMetadataResult{},
+		Body:   &CreditNoteMetadataParams{Metadata: metadata},
+	}
+
+	result, err := cr.client.Post(ctx, clientRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	metadataResult, ok := result.(*CreditNoteMetadataResult)
+	if !ok {
+		return nil, &ErrorTypeAssert
+	}
+
+	return metadataResult.Metadata, nil
+}
+
+func (cr *CreditNoteRequest) MergeMetadata(ctx context.Context, creditNoteID uuid.UUID, metadata map[string]*string) (map[string]*string, *Error) {
+	subPath := fmt.Sprintf("%s/%s/%s", "credit_notes", creditNoteID, "metadata")
+
+	clientRequest := &ClientRequest{
+		Path:   subPath,
+		Result: &CreditNoteMetadataResult{},
+		Body:   &CreditNoteMetadataParams{Metadata: metadata},
+	}
+
+	result, err := cr.client.Patch(ctx, clientRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	metadataResult, ok := result.(*CreditNoteMetadataResult)
+	if !ok {
+		return nil, &ErrorTypeAssert
+	}
+
+	return metadataResult.Metadata, nil
+}
+
+func (cr *CreditNoteRequest) DeleteAllMetadata(ctx context.Context, creditNoteID uuid.UUID) (map[string]*string, *Error) {
+	subPath := fmt.Sprintf("%s/%s/%s", "credit_notes", creditNoteID, "metadata")
+
+	clientRequest := &ClientRequest{
+		Path:   subPath,
+		Result: &CreditNoteMetadataResult{},
+	}
+
+	result, err := cr.client.Delete(ctx, clientRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	metadataResult, ok := result.(*CreditNoteMetadataResult)
+	if !ok {
+		return nil, &ErrorTypeAssert
+	}
+
+	return metadataResult.Metadata, nil
+}
+
+func (cr *CreditNoteRequest) DeleteMetadataKey(ctx context.Context, creditNoteID uuid.UUID, key string) (map[string]*string, *Error) {
+	subPath := fmt.Sprintf("%s/%s/%s/%s", "credit_notes", creditNoteID, "metadata", key)
+
+	clientRequest := &ClientRequest{
+		Path:   subPath,
+		Result: &CreditNoteMetadataResult{},
+	}
+
+	result, err := cr.client.Delete(ctx, clientRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	metadataResult, ok := result.(*CreditNoteMetadataResult)
+	if !ok {
+		return nil, &ErrorTypeAssert
+	}
+
+	return metadataResult.Metadata, nil
 }
