@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 
-	qt "github.com/frankban/quicktest"
 	"github.com/bentoml/lago-go-client"
+	qt "github.com/frankban/quicktest"
 )
 
 func handlerFuncWithResponse(c *qt.C, responseFunc func() interface{}, assertRequestFunc func(*qt.C, *http.Request)) http.HandlerFunc {

@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	qt "github.com/frankban/quicktest"
 	. "github.com/bentoml/lago-go-client"
 	lt "github.com/bentoml/lago-go-client/testing"
+	qt "github.com/frankban/quicktest"
 )
 
 // Mock JSON response structure
